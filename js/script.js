@@ -2,7 +2,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.enableClosingConfirmation();
 
-document.body.style.backgroundColor = '#000000';
+document.body.style.backgroundColor = '#0a0e17';
 
 // ==========================================
 // ⚙️ НАЛАШТУВАННЯ
