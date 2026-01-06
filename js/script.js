@@ -13,7 +13,7 @@ if (tg.colorScheme === 'light') {
 
 // Канал для тестів (tsnug - там є відео і фото)
 // Зміни на свій, коли створиш власний
-const CHANNEL_USERNAME = 'tsnug'; 
+const CHANNEL_USERNAME = 'ssternenko'; 
 
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
