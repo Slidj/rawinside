@@ -10,8 +10,8 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Використовуємо надійні дзеркала
-const RSS_URLS = [
+// Використовуємо найнадійніші дзеркала
+const BASE_RSS_URLS = [
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
@@ -20,121 +20,122 @@ const RSS_URLS = [
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (XML PARSER)
+// 🚀 ЗАВАНТАЖЕННЯ (JSON + ANTI-CACHE)
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
+    // Показуємо напис тільки при першому вході
     if (!isBackground) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    // Додаємо випадкове число, щоб проксі не кешував запит
-    const cacheBuster = Date.now();
+    // 🔥 ЯДЕРНИЙ АНТИ-КЕШ 🔥
+    // Генеруємо випадкове число
+    const randomParam = Math.floor(Math.random() * 99999);
 
-    for (let i = 0; i < RSS_URLS.length; i++) {
-        // 🔥 ВИКОРИСТОВУЄМО ПРЯМИЙ ПРОКСІ (AllOrigins) 🔥
-        // Це дозволяє отримати чистий XML без кешування rss2json
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(RSS_URLS[i])}&rand=${cacheBuster}`;
+    for (let i = 0; i < BASE_RSS_URLS.length; i++) {
+        // Ми додаємо випадкове число ПРЯМО В URL КАНАЛУ
+        // Це змушує OpenRSS/RSSHub думати, що це новий запит і віддавати свіжі дані
+        const freshRssUrl = `${BASE_RSS_URLS[i]}?random_check=${randomParam}`;
+        
+        // І ще одне випадкове число для самого rss2json
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(freshRssUrl)}&api_key=kq5b546876547657567`;
 
         try {
-            const response = await fetch(proxyUrl);
-            const strXML = await response.text();
-            
-            // Перетворюємо текст у XML-документ
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(strXML, "text/xml");
-            
-            // Шукаємо всі елементи <item> (новини)
-            const items = xmlDoc.querySelectorAll("item");
+            const response = await fetch(apiUrl);
+            const data = await response.json();
 
-            if (items.length > 0) {
-                container.innerHTML = ''; // Чистимо екран
+            if (data.status === 'ok' && data.items.length > 0) {
+                container.innerHTML = ''; 
                 
-                // Перебираємо новини
-                items.forEach(item => {
+                data.items.forEach(item => {
+                    // Обгортаємо в try-catch, щоб один битий пост не зламав всю стрічку
                     try {
-                        const parsedItem = parseXMLPost(item);
+                        const parsedItem = parseTelegramPost(item);
                         if (parsedItem) createCard(parsedItem);
                     } catch (err) {
-                        console.error("Помилка парсингу поста", err);
+                        console.error("Помилка поста:", err);
                     }
                 });
                 
                 if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
-                return; // Успіх! Виходимо.
+                return; // Все супер, виходимо
             }
         } catch (e) {
-            console.warn(`Дзеркало ${i} не спрацювало.`);
+            console.warn(`Дзеркало ${i} не відповіло.`);
         }
     }
 
     if (!isBackground) {
         container.innerHTML = `
             <div class="error">
-                <p>Немає зв'язку з каналом</p>
+                <p>Немає зв'язку з сервером</p>
                 <small style="opacity:0.5">Спробуйте пізніше</small>
             </div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// Запуск (оновлення кожні 2 хвилини)
+// Запуск (оновлення кожні 90 секунд)
 loadNews(false);
-setInterval(() => { loadNews(true); }, 120000); 
+setInterval(() => { loadNews(true); }, 90000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР XML (НОВА ЛОГІКА)
+// 🧠 ПАРСЕР (ВСЕЇДНИЙ + АЛЬБОМИ)
 // ==========================================
 
-function parseXMLPost(xmlItem) {
-    // 1. Отримуємо базові поля з XML
-    const titleNode = xmlItem.querySelector("title");
-    const descNode = xmlItem.querySelector("description");
-    const linkNode = xmlItem.querySelector("link");
-    const pubDateNode = xmlItem.querySelector("pubDate");
-    const enclosureNode = xmlItem.querySelector("enclosure");
-
-    let rawDesc = descNode ? (descNode.textContent || descNode.innerHTML) : "";
-    let itemTitle = titleNode ? titleNode.textContent : "Новина";
-    let itemLink = linkNode ? linkNode.textContent : "#";
-    let itemDate = pubDateNode ? new Date(pubDateNode.textContent) : new Date();
-
+function parseTelegramPost(item) {
     let imageSrc = null;
     let videoSrc = null;
-
-    // Створюємо тимчасовий елемент для аналізу HTML всередині опису
+    
     let tempDiv = document.createElement("div");
-    tempDiv.innerHTML = rawDesc;
+    tempDiv.innerHTML = item.description || "";
 
-    // --- 2. ПОШУК МЕДІА ---
-
-    // А) Перевіряємо enclosure (вкладення в XML)
-    if (enclosureNode) {
-        const type = enclosureNode.getAttribute("type");
-        const url = enclosureNode.getAttribute("url");
+    // --- ОБРОБКА АЛЬБОМІВ (МАСИВІВ) ---
+    // rss2json іноді повертає enclosure як масив, якщо там багато фото
+    let enclosure = item.enclosure;
+    if (Array.isArray(enclosure) && enclosure.length > 0) {
+        // Шукаємо перше відео або перше фото в масиві
+        let vid = enclosure.find(e => e.type.includes('video'));
+        let img = enclosure.find(e => e.type.includes('image'));
         
-        if (type && type.includes("video")) videoSrc = url;
-        if (type && type.includes("image")) imageSrc = url;
+        if (vid) {
+            enclosure = vid; // Пріоритет відео
+        } else if (img) {
+            enclosure = img;
+        } else {
+            enclosure = enclosure[0];
+        }
     }
 
-    // Б) Якщо немає, шукаємо в HTML опису
+    // 1. ВІДЕО
+    if (enclosure && enclosure.type && enclosure.type.includes('video')) {
+        videoSrc = enclosure.link;
+    }
     if (!videoSrc) {
         let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
 
+    // 2. КАРТИНКА
+    if (enclosure && enclosure.type && enclosure.type.includes('image')) {
+        imageSrc = enclosure.link;
+    }
     if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
-
-    // В) Регулярний вираз як остання надія для картинок
-    if (!imageSrc) {
+    if (!imageSrc && item.thumbnail) {
+        imageSrc = item.thumbnail;
+    }
+    
+    // Regex (запасний варіант)
+    if (!imageSrc && item.description) {
         const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
-        const match = rawDesc.match(imgRegex);
+        const match = item.description.match(imgRegex);
         if (match) imageSrc = match[1];
     }
 
@@ -142,32 +143,30 @@ function parseXMLPost(xmlItem) {
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксіювання картинки
+    // Проксі (wsrv.nl)
     if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // --- 3. ОБРОБКА ТЕКСТУ ---
+    // 3. ТЕКСТ
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
-
-    // Якщо тексту немає
+    
     if (!cleanText) {
-        cleanText = videoSrc ? "Відео новина" : "Фото новина";
+        if (videoSrc) cleanText = "Відео новина";
+        else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото новина";
+        else cleanText = "Новина";
     }
 
-    // Чистимо від тегів [Video]
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
-
-    // Короткий заголовок
+    
+    // Короткий заголовок (4 слова)
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
 
-    // Форматування дати
-    const dateStr = itemDate.toLocaleDateString('uk-UA', { 
-        day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
-    });
+    const dateObj = new Date(item.pubDate);
+    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
         title: shortTitle, 
@@ -175,7 +174,7 @@ function parseXMLPost(xmlItem) {
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
-        link: itemLink
+        link: item.link
     };
 }
 
