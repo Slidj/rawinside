@@ -4,7 +4,7 @@ tg.expand();
 // НАЛАШТУВАННЯ
 // Впиши сюди юзернейм свого каналу (без @)
 // Поки що для тесту стоїть офіційний канал Telegram, щоб ти бачив результат
-const CHANNEL_USERNAME = 'telegram'; 
+const CHANNEL_USERNAME = 'ssternenko'; 
 
 // Сервіс, який перетворює канал на JSON (api.rss2json.com)
 const RSS_URL = `https://api.rss2json.com/v1/api.json?rss_url=https://t.me/s/${CHANNEL_USERNAME}`;
