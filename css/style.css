@@ -1,39 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;900&display=swap');
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 /* --- ОСНОВНИЙ ФОН --- */
 body {
     margin: 0; padding: 0;
-    /* Темно-синій матовий градієнт */
     background: linear-gradient(135deg, #0a0e17 0%, #141e30 100%);
     color: #ffffff;
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
-    
-    /* 🔥 ВИПРАВЛЕННЯ: Збільшив відступ до 140px (для надійності) 🔥 */
     padding-top: 140px; 
     padding-bottom: 40px;
 }
 
-/* --- ШАПКА --- */
+/* --- ШАПКА (Логотип) --- */
 .header {
     position: fixed; 
     top: 0; left: 0; width: 100%;
-    /* 🔥 ВИПРАВЛЕННЯ: Висота шапки теж 140px 🔥 */
     height: 140px; 
-    
-    /* Текст притиснутий до низу шапки */
     display: flex; align-items: flex-end; 
     padding: 15px 20px 20px 20px; 
-    
     background: rgba(10, 14, 23, 0.85); 
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     z-index: 50; 
 }
-.header h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px; }
+
+/* 🔥 СТИЛЬ ЛОГОТИПУ INSIDE 🔥 */
+.header h1 { 
+    margin: 0; 
+    font-size: 2rem; /* Великий розмір */
+    font-weight: 900; /* Дуже жирний */
+    letter-spacing: 2px; /* Широкі літери */
+    font-style: italic; /* Трішки нахил для динаміки */
+    background: linear-gradient(to right, #ffffff, #a5b4fc); /* Градієнт тексту */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+}
 
 /* --- СТРІЧКА НОВИН --- */
 .news-container {
@@ -45,7 +50,7 @@ body {
     padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem;
 }
 
-/* --- КАРТКА НОВИНИ --- */
+/* --- КАРТКА --- */
 .news-card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(15px);
@@ -75,7 +80,6 @@ body {
     object-fit: cover; display: block;
 }
 
-/* Значок Play */
 .play-icon-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: 50px; height: 50px;
@@ -88,7 +92,6 @@ body {
 .play-icon-overlay::after { content: '▶'; font-size: 20px; color: white; margin-left: 4px; }
 
 .card-content { padding: 15px; }
-/* Заголовок у картці (великий) */
 .card-title { margin: 0 0 8px 0; font-size: 1.2rem; font-weight: 700; line-height: 1.3; }
 .card-meta { margin-top: 5px; font-size: 0.8rem; color: rgba(255,255,255,0.5); text-transform: uppercase; }
 
@@ -99,7 +102,8 @@ body {
     background: rgba(10, 14, 23, 0.9);
     backdrop-filter: blur(8px);
     opacity: 0; pointer-events: none;
-    transition: opacity 0.3s;
+    /* Плавна поява фону */
+    transition: opacity 0.6s ease; 
 }
 .modal-wrapper.active { opacity: 1; pointer-events: auto; }
 
@@ -109,10 +113,16 @@ body {
     background: #0e1522;
     border-top-left-radius: 24px; border-top-right-radius: 24px;
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    
+    /* 🔥 ВИПРАВЛЕННЯ: Дуже плавна анімація (0.6 секунди) 🔥 */
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    
     display: flex; flex-direction: column;
     overflow: hidden;
     box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+    
+    /* 🔥 ВИПРАВЛЕННЯ: Відступ зверху, щоб відео не лізло під хрестик 🔥 */
+    padding-top: 60px; 
 }
 .modal-wrapper.active .modal-sheet { transform: translateY(0); }
 
