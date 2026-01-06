@@ -1,7 +1,7 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Налаштування кольорів
+// Налаштування теми
 if (tg.colorScheme === 'light') {
     document.body.style.backgroundColor = '#ffffff';
     document.body.style.color = '#000000';
@@ -11,106 +11,111 @@ if (tg.colorScheme === 'light') {
 // ⚙️ НАЛАШТУВАННЯ
 // ==========================================
 
-// Впиши сюди юзернейм ТВОГО каналу (без @)
-// Спробуй створити свій канал, написати туди пост і вписати сюди його юзернейм.
-// Офіційний канал 'telegram' занадто великий і часто викликає помилки у безкоштовних парсерів.
-const CHANNEL_USERNAME = 'ssternenko'; 
+// 👇 Спробуй для тесту канал 'tsnug' (там точно є фото) або свій канал
+const CHANNEL_USERNAME = 'telegram'; 
 
-// Список сервісів (дзеркал), які ми будемо пробувати по черзі
 const RSS_SERVICES = [
-    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`, // Варіант 1 (Найпопулярніший)
-    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,            // Варіант 2 (Той, що був)
-    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`              // Варіант 3 (Резервний)
+    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
 ];
 
+// Картинка, яка буде, якщо справжню не вдалось завантажити
+const DEFAULT_IMAGE = 'https://placehold.co/600x400/2a2a2e/FFF?text=News';
+
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ НОВИН (РОЗУМНЕ)
+// 🚀 ЗАВАНТАЖЕННЯ
 // ==========================================
 
 async function loadNews() {
     const container = document.getElementById('news-feed');
-    container.innerHTML = '<div class="loading">🔄 Підключення до каналу...</div>';
+    // Красивий спінер завантаження
+    container.innerHTML = '<div class="loading">📡 Отримуємо дані...</div>';
 
-    // Пробуємо сервіси по черзі
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        const rssUrl = RSS_SERVICES[i];
-        // Формуємо посилання для конвертера rss2json
-        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+        // Додаємо api_key=0, щоб уникнути кешування (іноді допомагає)
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&api_key=kq5b546876547657567`;
 
         try {
-            console.log(`Спроба #${i + 1}: ${rssUrl}`);
-            const response = await fetch(apiUrl);
+            const response = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}`);
             const data = await response.json();
 
-            // Якщо успішно отримали дані
             if (data.status === 'ok' && data.items.length > 0) {
-                container.innerHTML = ''; // Очищаємо "Завантаження..."
+                container.innerHTML = ''; 
                 
                 data.items.forEach(item => {
                     const parsedItem = parseTelegramPost(item);
                     if (parsedItem) createCard(parsedItem);
                 });
-                return; // Виходимо з функції, бо все вийшло!
+                return; // Успіх!
             }
-        } catch (error) {
-            console.warn(`Сервіс ${i + 1} не відповів.`);
+        } catch (e) {
+            console.warn(`Дзеркало ${i} не спрацювало.`);
         }
     }
 
-    // Якщо ми тут - значить жоден сервіс не спрацював
-    container.innerHTML = `
-        <div class="error" style="text-align:center; padding:20px; color:#ef4444;">
-            <h3>😔 Не вдалося завантажити</h3>
-            <p>Канал <b>@${CHANNEL_USERNAME}</b> недоступний через API.</p>
-            <p>1. Перевір, чи канал публічний.<br>2. Напиши туди новий пост (текст+фото).<br>3. Спробуй змінити 'telegram' на свій канал.</p>
-        </div>
-    `;
+    container.innerHTML = `<div class="error">Помилка завантаження @${CHANNEL_USERNAME}</div>`;
 }
 
 // ==========================================
-// 🧠 ОБРОБКА ДАНИХ
+// 🧠 ОБРОБКА (ВИПРАВЛЕНО РОБОТУ З КАРТИНКАМИ)
 // ==========================================
 
 function parseTelegramPost(item) {
-    // 1. Шукаємо картинку
-    // Різні сервіси віддають картинку по-різному, шукаємо всюди
-    const imgRegex = /src="([^"]+)"/;
-    let imgMatch = item.description.match(imgRegex);
-    
-    // Якщо в описі немає, перевіряємо поле enclosure (стандарт RSS)
-    let imageSrc = imgMatch ? imgMatch[1] : (item.enclosure?.link || null);
-    
-    // Заглушка
-    if (!imageSrc) imageSrc = 'https://placehold.co/600x400/2a2a2e/FFF?text=News';
+    // 1. ПРІОРИТЕТ 1: Шукаємо вкладення (enclosure) - це найнадійніший спосіб
+    let imageSrc = item.enclosure?.link;
 
-    // 2. Чистимо текст
+    // 2. ПРІОРИТЕТ 2: Шукаємо тег <img> в описі
+    if (!imageSrc) {
+        const imgRegex = /src="([^"]+)"/;
+        const match = item.description.match(imgRegex);
+        if (match) imageSrc = match[1];
+    }
+
+    // 3. ПРІОРИТЕТ 3: Шукаємо в thumbnail
+    if (!imageSrc && item.thumbnail) {
+        imageSrc = item.thumbnail;
+    }
+
+    // Якщо це ВІДЕО (mp4), RSS може дати посилання, але <img> його не покаже.
+    // Тому ставимо заглушку, якщо розширення файлу не картинка
+    if (imageSrc && imageSrc.includes('.mp4')) {
+        imageSrc = DEFAULT_IMAGE;
+    }
+
+    // Якщо картинки немає зовсім
+    if (!imageSrc) imageSrc = DEFAULT_IMAGE;
+
+    // ПРОКСІ для обходу захисту Телеграм (wsrv.nl)
+    // Додаємо це, щоб картинка точно відкрилась
+    if (imageSrc !== DEFAULT_IMAGE) {
+        imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
+    }
+
+    // Чистка тексту
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
-    let cleanText = tempDiv.innerText || tempDiv.textContent || "";
+    let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
 
-    // Якщо пост порожній і без картинки - пропускаємо
-    if (!cleanText && imageSrc.includes('placehold')) return null;
-    if (!cleanText) cleanText = "Новина без тексту (тільки фото)...";
+    if (!cleanText) cleanText = "Читати далі...";
 
-    // 3. Дата
+    // Дата
     const dateObj = new Date(item.pubDate);
-    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
-    const timeStr = dateObj.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = dateObj.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
 
     return {
-        title: item.title && item.title.length < 50 && !item.title.includes('http') ? item.title : "Новина каналу",
-        short: cleanText.substring(0, 100) + (cleanText.length > 100 ? "..." : ""),
+        title: item.title && !item.title.startsWith('http') ? item.title : "Новина",
+        short: cleanText.substring(0, 80) + "...",
         full: cleanText,
         image: imageSrc,
-        date: `${dateStr}, ${timeStr}`,
-        link: item.link,
-        tag: "NEWS"
+        date: dateStr,
+        link: item.link
     };
 }
 
 // ==========================================
-// 🎨 ІНТЕРФЕЙС
+// 🎨 ІНТЕРФЕЙС (З ОБРОБКОЮ ПОМИЛОК КАРТИНОК)
 // ==========================================
 
 function createCard(newsItem) {
@@ -119,8 +124,14 @@ function createCard(newsItem) {
     card.className = 'news-card';
     card.onclick = () => openModal(newsItem);
 
+    // ЗВЕРНИ УВАГУ: added onerror="..."
+    // Якщо картинка не завантажиться, вона заміниться на заглушку
     card.innerHTML = `
-        <img src="${newsItem.image}" alt="" class="card-thumb" onerror="this.style.display='none'">
+        <img src="${newsItem.image}" 
+             class="card-thumb" 
+             loading="lazy" 
+             onerror="this.onerror=null;this.src='${DEFAULT_IMAGE}';">
+        
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
             <p class="card-desc">${newsItem.short}</p>
@@ -130,23 +141,19 @@ function createCard(newsItem) {
     container.appendChild(card);
 }
 
-// ==========================================
-// 📱 МОДАЛЬНЕ ВІКНО
-// ==========================================
-
+// МОДАЛЬНЕ ВІКНО
 function openModal(newsItem) {
     const modalImg = document.getElementById('modal-img');
     modalImg.src = newsItem.image;
-    modalImg.style.display = newsItem.image.includes('placehold') ? 'none' : 'block';
+    // Теж додаємо обробку помилки для великої картинки
+    modalImg.onerror = function() { this.src = DEFAULT_IMAGE; };
 
-    document.getElementById('modal-tag').innerText = newsItem.tag;
     document.getElementById('modal-date').innerText = newsItem.date;
     document.getElementById('modal-title').innerText = newsItem.title;
     document.getElementById('modal-text').innerText = newsItem.full;
     document.getElementById('modal-link').href = newsItem.link;
 
     document.getElementById('news-modal').classList.add('active');
-    tg.HapticFeedback.impactOccurred('light');
     tg.BackButton.show();
     tg.BackButton.onClick(closeModal);
 }
@@ -154,15 +161,7 @@ function openModal(newsItem) {
 function closeModal() {
     document.getElementById('news-modal').classList.remove('active');
     tg.BackButton.hide();
-    tg.BackButton.offClick(closeModal);
 }
 
-// ==========================================
-// 🚀 ЗАПУСК
-// ==========================================
-const options = { weekday: 'long', month: 'long', day: 'numeric' };
-const today = new Date().toLocaleDateString('uk-UA', options);
-document.getElementById('current-date').innerText = today.charAt(0).toUpperCase() + today.slice(1);
-
+// ЗАПУСК
 loadNews();
-  
