@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>News App</title>
-    
-    <link rel="stylesheet" href="css/style.css?v=5">
-    
+    <title>News Feed</title>
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -26,24 +24,20 @@
             <div class="drag-handle" onclick="closeModal()"></div>
             
             <div class="modal-content">
-                <img id="modal-img" src="" alt="News Image" class="modal-image">
-                <div class="modal-body">
-                    <div class="modal-meta">
-                        <span id="modal-tag" class="news-tag">NEWS</span>
-                        <span id="modal-date" class="news-date">...</span>
-                    </div>
-                    
-                    <h2 id="modal-title">Заголовок</h2>
-                    <p id="modal-text" class="full-text">Текст новини...</p>
-                    
-                    <a href="#" id="modal-link" target="_blank" class="read-more-btn">
-                        Читати в каналі ✈️
-                    </a>
+                <div class="modal-header-info">
+                    <span id="modal-date" class="news-date">...</span>
                 </div>
+                <h2 id="modal-title">Заголовок</h2>
+
+                <div id="telegram-widget-container"></div>
+
+                <a href="#" id="modal-link" target="_blank" class="read-more-btn">
+                    Відкрити в каналі ✈️
+                </a>
             </div>
         </div>
     </div>
 
-    <script src="js/script.js?v=10"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
