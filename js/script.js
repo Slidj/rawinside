@@ -10,41 +10,40 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
+// 🔥 РОЗШИРЕНИЙ СПИСОК ДЗЕРКАЛ (Backup System) 🔥
+// Якщо перше не працює, скрипт піде на друге, третє і т.д.
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
-    `https://openrss.org/t.me/${CHANNEL_USERNAME}`
+    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
+    `https://hub.mosil.biz/telegram/channel/${CHANNEL_USERNAME}` // Додав ще одне резервне
 ];
 
-const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=NEWS';
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (Автоматичне)
+// 🚀 ЗАВАНТАЖЕННЯ (Auto Update)
 // ==========================================
 
-// Функція завантаження
-// isBackground = true (якщо це авто-оновлення, щоб не показувати спінер)
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
-    // Якщо це перший запуск - показуємо напис "Завантаження"
-    // Якщо це авто-оновлення - не чіпаємо екран, поки не отримаємо дані
     if (!isBackground) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    // Унікальний ключ, щоб сервер думав, що це новий запит (обхід кешу)
-    const cacheBuster = Date.now() + Math.floor(Math.random() * 1000);
+    // Унікальний ключ часу (обхід кешу)
+    const cacheBuster = Date.now();
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&api_key=kq5b546876547657567&t=${cacheBuster}`;
+        // 🔥 ПРИБРАВ ЛІМІТОВАНИЙ API KEY, залишив чистий запит 🔥
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&t=${cacheBuster}`;
 
         try {
             const response = await fetch(apiUrl);
             const data = await response.json();
 
             if (data.status === 'ok' && data.items.length > 0) {
-                // Якщо ми отримали нові дані - очищаємо контейнер і малюємо нові
                 container.innerHTML = ''; 
                 data.items.forEach(item => {
                     const parsedItem = parseTelegramPost(item);
@@ -54,15 +53,21 @@ async function loadNews(isBackground = false) {
                 if (!isBackground) {
                     tg.HapticFeedback.notificationOccurred('success');
                 }
+                // Якщо вдалось завантажити - виходимо з циклу і не мучимо інші сервери
                 return; 
             }
         } catch (e) {
-            console.warn(`Дзеркало ${i} пропущено.`);
+            console.warn(`Дзеркало ${i} (${RSS_SERVICES[i]}) не відповіло.`);
         }
     }
 
+    // Якщо ми тут - значить всі дзеркала відмовили
     if (!isBackground) {
-        container.innerHTML = `<div class="error">Помилка завантаження @${CHANNEL_USERNAME}</div>`;
+        container.innerHTML = `
+            <div class="error">
+                <p>⚠️ Перевантаження серверів</p>
+                <small>Спробуйте перезайти через хвилину</small>
+            </div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
 }
@@ -71,14 +76,12 @@ async function loadNews(isBackground = false) {
 // ⏰ ТАЙМЕР АВТО-ОНОВЛЕННЯ
 // ==========================================
 
-// Запускаємо перше завантаження одразу
 loadNews(false);
 
-// Ставимо таймер на кожні 60 секунд (60000 мс)
+// Збільшив час до 120 секунд (2 хвилини), щоб не блокувало
 setInterval(() => {
-    console.log("Авто-оновлення новин...");
-    loadNews(true); // true = тихий режим
-}, 60000);
+    loadNews(true); 
+}, 120000); 
 
 
 // ==========================================
@@ -109,9 +112,13 @@ function parseTelegramPost(item) {
         if (imgTag) imageSrc = imgTag.src;
     }
     if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
+    
+    // Якщо є відео, але немає картинки - заглушка
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
+    // Якщо взагалі нічого - заглушка
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
+    // Проксі тільки для реальних картинок (не для заглушок)
     if (imageSrc && !imageSrc.includes('wsrv.nl') && !imageSrc.includes('placehold')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
