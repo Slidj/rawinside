@@ -19,26 +19,41 @@ const RSS_SERVICES = [
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=NEWS';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ
+// 🚀 ЗАВАНТАЖЕННЯ (Автоматичне)
 // ==========================================
 
-async function loadNews() {
+// Функція завантаження
+// isBackground = true (якщо це авто-оновлення, щоб не показувати спінер)
+async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
-    container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
+    
+    // Якщо це перший запуск - показуємо напис "Завантаження"
+    // Якщо це авто-оновлення - не чіпаємо екран, поки не отримаємо дані
+    if (!isBackground) {
+        container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
+    }
+
+    // Унікальний ключ, щоб сервер думав, що це новий запит (обхід кешу)
+    const cacheBuster = Date.now() + Math.floor(Math.random() * 1000);
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&nocache=${Date.now()}`;
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&api_key=kq5b546876547657567&t=${cacheBuster}`;
 
         try {
             const response = await fetch(apiUrl);
             const data = await response.json();
 
             if (data.status === 'ok' && data.items.length > 0) {
+                // Якщо ми отримали нові дані - очищаємо контейнер і малюємо нові
                 container.innerHTML = ''; 
                 data.items.forEach(item => {
                     const parsedItem = parseTelegramPost(item);
                     if (parsedItem) createCard(parsedItem);
                 });
+                
+                if (!isBackground) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
                 return; 
             }
         } catch (e) {
@@ -46,11 +61,28 @@ async function loadNews() {
         }
     }
 
-    container.innerHTML = `<div class="error">Помилка завантаження @${CHANNEL_USERNAME}</div>`;
+    if (!isBackground) {
+        container.innerHTML = `<div class="error">Помилка завантаження @${CHANNEL_USERNAME}</div>`;
+        tg.HapticFeedback.notificationOccurred('error');
+    }
 }
 
 // ==========================================
-// 🧠 ПАРСЕР (ОЧИЩЕННЯ ТЕКСТУ)
+// ⏰ ТАЙМЕР АВТО-ОНОВЛЕННЯ
+// ==========================================
+
+// Запускаємо перше завантаження одразу
+loadNews(false);
+
+// Ставимо таймер на кожні 60 секунд (60000 мс)
+setInterval(() => {
+    console.log("Авто-оновлення новин...");
+    loadNews(true); // true = тихий режим
+}, 60000);
+
+
+// ==========================================
+// 🧠 ПАРСЕР
 // ==========================================
 
 function parseTelegramPost(item) {
@@ -59,7 +91,7 @@ function parseTelegramPost(item) {
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
 
-    // 1. Пошук ВІДЕО
+    // 1. ВІДЕО
     if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('video/')) {
         videoSrc = item.enclosure.link;
     }
@@ -68,7 +100,7 @@ function parseTelegramPost(item) {
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
 
-    // 2. Пошук КАРТИНКИ
+    // 2. КАРТИНКА
     if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
         imageSrc = item.enclosure.link;
     }
@@ -84,16 +116,13 @@ function parseTelegramPost(item) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // 3. ТЕКСТ (Чистка і Форматування)
+    // 3. ТЕКСТ
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
     if (!cleanText) cleanText = videoSrc ? "Відео новина" : "";
 
-    // 🔥 ОЧИЩЕННЯ ВІД ТЕГІВ ТИПУ [Video] або [Фото] 🔥
-    // Забираємо все, що в квадратних дужках на початку
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
 
-    // 🔥 СТВОРЮЄМО КОРОТКИЙ ЗАГОЛОВОК (3-4 слова) 🔥
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
@@ -102,9 +131,7 @@ function parseTelegramPost(item) {
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
 
     return {
-        // Заголовок тепер чистий і короткий
         title: shortTitle, 
-        // Повний текст для модалки
         full: cleanText,  
         image: imageSrc,
         video: videoSrc, 
@@ -125,8 +152,6 @@ function createCard(newsItem) {
 
     const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
 
-    // 🔥 ПРИБРАВ ЗАЙВУ СТРОКУ <p class="card-desc"> 🔥
-    // Тепер тільки картинка, один заголовок і дата
     card.innerHTML = `
         <div class="card-media-wrapper">
             <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
@@ -179,9 +204,6 @@ function openModal(newsItem) {
         mediaContainer.appendChild(img);
     }
 
-    // У модалці показуємо повний текст
-    // Але якщо заголовок і текст збігаються (короткий пост), то заголовок можна не писати
-    // Тут ми просто виводимо все як є
     document.getElementById('modal-title').innerText = newsItem.title; 
     document.getElementById('modal-date').innerText = newsItem.date;
     document.getElementById('modal-text').innerText = newsItem.full;
@@ -197,5 +219,3 @@ function closeModal() {
     setTimeout(() => { document.getElementById('media-container').innerHTML = ''; }, 300);
     tg.BackButton.hide();
 }
-
-loadNews();
