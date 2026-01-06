@@ -12,7 +12,7 @@ if (tg.colorScheme === 'light') {
 // ==========================================
 
 // 👇 Спробуй для тесту канал 'tsnug' (там точно є фото) або свій канал
-const CHANNEL_USERNAME = 'telegram'; 
+const CHANNEL_USERNAME = 'ssternenko'; 
 
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
