@@ -10,7 +10,7 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Джерела, які віддають ПОВНИЙ текст (Full Text)
+// Використовуємо надійні дзеркала
 const RSS_URLS = [
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
@@ -20,7 +20,7 @@ const RSS_URLS = [
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (DIRECT XML via CODETABS)
+// 🚀 ЗАВАНТАЖЕННЯ
 // ==========================================
 
 async function loadNews(isBackground = false) {
@@ -30,30 +30,24 @@ async function loadNews(isBackground = false) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    // Анти-кеш: змінюємо цифру раз на 5 хвилин.
-    // Це дозволяє бачити нові новини, але не "злить" сервер частими запитами.
-    const safeTimestamp = Math.floor(Date.now() / 300000); 
+    const safeTimestamp = Math.floor(Date.now() / 300000); // 5 хвилин кеш
 
     let success = false;
 
     for (let i = 0; i < RSS_URLS.length; i++) {
         if (success) break;
 
-        // CodeTabs - це дуже надійний проксі, який рідко блокує
+        // CodeTabs проксі
         const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(RSS_URLS[i])}&dummy=${safeTimestamp}`;
 
         try {
             const response = await fetch(proxyUrl);
             const strXML = await response.text();
             
-            // Перевіряємо, чи це XML
-            if (!strXML.includes('<?xml') && !strXML.includes('<rss')) {
-                throw new Error('Not XML');
-            }
+            if (!strXML.includes('<?xml') && !strXML.includes('<rss')) throw new Error('Not XML');
 
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(strXML, "text/xml");
-            
             const items = xmlDoc.querySelectorAll("item");
 
             if (items.length > 0) {
@@ -78,7 +72,6 @@ async function loadNews(isBackground = false) {
         container.innerHTML = `
             <div class="error">
                 <p>Не вдалося завантажити новини</p>
-                <small style="opacity:0.5">Всі канали перевантажені</small>
             </div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
@@ -86,16 +79,14 @@ async function loadNews(isBackground = false) {
 
 // Запуск
 loadNews(false);
-// Авто-оновлення раз на 5 хвилин (щоб напевно не заблокували)
 setInterval(() => { loadNews(true); }, 300000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР XML (ПОВНИЙ ТЕКСТ)
+// 🧠 ПАРСЕР XML (З ОЧИЩЕННЯМ ТЕКСТУ)
 // ==========================================
 
 function parseXMLPost(xmlItem) {
-    // Функція для витягування тексту з тегу
     const getTag = (name) => {
         const el = xmlItem.querySelector(name);
         return el ? (el.textContent || el.innerHTML) : "";
@@ -104,20 +95,36 @@ function parseXMLPost(xmlItem) {
     let title = getTag("title");
     let link = getTag("link");
     let pubDate = getTag("pubDate");
-    
-    // 🔥 ГОЛОВНЕ: Отримуємо повний опис 🔥
-    // У Telegram RSS весь текст лежить у <description>
     let rawDescription = getTag("description");
     
-    // Очищаємо HTML, щоб дістати чистий текст для перевірок, 
-    // але зберігаємо оригінал для модалки (щоб були абзаци)
+    // --- ОЧИЩЕННЯ ТЕКСТУ (ГЕНЕРАЛЬНЕ ПРИБИРАННЯ) ---
+    
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = rawDescription;
+    
+    // Видаляємо всі посилання та кнопки з тексту (вони смітять)
+    tempDiv.querySelectorAll('a').forEach(a => a.remove());
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n')); // Зберігаємо абзаци
+
+    let cleanText = tempDiv.innerText || "";
+    
+    // 1. Видаляємо теги [Video], [Photo], [Album] і все що в квадратних дужках на початку
+    // Ця регулярка видаляє будь-які квадратні дужки на початку рядка
+    cleanText = cleanText.replace(/^(?:\[[^\]]*\]\s*)+/g, '');
+    
+    // 2. Видаляємо конкретні слова, якщо вони зустрічаються десь всередині
+    cleanText = cleanText.replace(/\[Video\]/gi, '')
+                         .replace(/\[Photo\]/gi, '')
+                         .replace(/\[Album\]/gi, '');
+
+    // 3. Чистимо зайві пробіли
+    cleanText = cleanText.trim();
+
+    // --- ПОШУК МЕДІА ---
 
     let imageSrc = null;
     let videoSrc = null;
 
-    // --- 1. ПОШУК МЕДІА (ENCLOSURE) ---
     const enclosures = xmlItem.querySelectorAll("enclosure");
     enclosures.forEach(enc => {
         const type = enc.getAttribute("type");
@@ -126,63 +133,52 @@ function parseXMLPost(xmlItem) {
         if (type && type.includes("image") && !imageSrc) imageSrc = url;
     });
 
-    // --- 2. ПОШУК МЕДІА (HTML) ---
     if (!videoSrc) {
-        let videoTag = tempDiv.querySelector('video');
+        let videoTag = tempDiv.querySelector('video'); // tempDiv тут ще старий, це ок
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
+    
+    // Шукаємо картинку в rawDescription (бо з tempDiv ми могли видалити посилання)
     if (!imageSrc) {
-        let imgTag = tempDiv.querySelector('img');
+        let rawDiv = document.createElement("div");
+        rawDiv.innerHTML = rawDescription;
+        let imgTag = rawDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
     
-    // Regex для картинок в тексті
     if (!imageSrc) {
         const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
         const match = rawDescription.match(imgRegex);
         if (match) imageSrc = match[1];
     }
 
-    // Заглушки
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксі зображень
     if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // --- 3. ОБРОБКА ТЕКСТУ ---
+    // --- ЗАГОЛОВОК ---
     
-    // Для повного тексту беремо те, що в tempDiv (там текст без HTML тегів <video>, але з форматуванням)
-    // Але нам треба прибрати зайві переноси рядків на початку
-    let fullText = tempDiv.innerText.trim();
-    
-    // Якщо тексту немає, ставимо заглушку
-    if (!fullText || fullText.length < 2) {
-        if (videoSrc) fullText = "Дивіться відео у повному вікні.";
-        else fullText = "Новина без текстового опису.";
+    if (!cleanText) {
+        if (videoSrc) cleanText = "Відео новина";
+        else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото новина";
+        else cleanText = "Новина";
     }
 
-    // Прибираємо [Video], [Image] на початку
-    fullText = fullText.replace(/^\[[^\]]+\]\s*/, '');
+    // Робимо красивий короткий заголовок
+    // Беремо перші 4 слова з вже ОЧИЩЕНОГО тексту
+    let words = cleanText.split(/\s+/);
+    let shortTitle = words.slice(0, 4).join(' ');
+    if (words.length > 4) shortTitle += "...";
 
-    // Формуємо короткий заголовок (4 слова) для картки
-    // Але якщо оригінальний заголовок (title) не "Новина" і не посилання, беремо його
-    let shortTitle = title;
-    if (!shortTitle || shortTitle.includes('http') || shortTitle.length < 3) {
-        let words = fullText.split(/\s+/);
-        shortTitle = words.slice(0, 4).join(' ');
-        if (words.length > 4) shortTitle += "...";
-    }
-
-    // Дата
     const dateObj = new Date(pubDate);
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
         title: shortTitle, 
-        full: fullText,  // Тут тепер повний текст
+        full: cleanText,  
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
@@ -232,20 +228,6 @@ function openModal(newsItem) {
         video.playsInline = true; 
         video.loop = true;
         video.controls = true; 
-        
-        video.onerror = () => {
-            mediaContainer.innerHTML = ''; 
-            const fallbackImg = document.createElement('img');
-            fallbackImg.className = 'app-image';
-            fallbackImg.src = newsItem.image;
-            mediaContainer.appendChild(fallbackImg);
-            const msg = document.createElement('p');
-            msg.style.color = '#aaa';
-            msg.style.textAlign = 'center';
-            msg.style.marginTop = '10px';
-            msg.innerText = '(Відео доступне в каналі)';
-            mediaContainer.appendChild(msg);
-        };
         mediaContainer.appendChild(video);
     } else {
         const img = document.createElement('img');
@@ -257,7 +239,7 @@ function openModal(newsItem) {
     document.getElementById('modal-title').innerText = newsItem.title; 
     document.getElementById('modal-date').innerText = newsItem.date;
     
-    // Використовуємо innerText для безпеки, але зберігаємо переноси рядків
+    // Використовуємо innerText, щоб зберегти форматування (\n), але не показувати HTML теги
     document.getElementById('modal-text').innerText = newsItem.full;
     
     document.getElementById('modal-link').href = newsItem.link;
