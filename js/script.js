@@ -1,26 +1,24 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
-tg.enableClosingConfirmation(); // Запитувати перед закриттям
+tg.enableClosingConfirmation();
 
-// Налаштування кольорів (Форсуємо темну тему для кіношного ефекту)
 document.body.style.backgroundColor = '#000000';
-document.body.style.color = '#ffffff';
 
 // ==========================================
 // ⚙️ НАЛАШТУВАННЯ
 // ==========================================
 
-// Спробуй канал 'tsnug' або свій власний
-const CHANNEL_USERNAME = 'ssternenko'; 
+// Спробуй 'tsnug' для тесту відео, або свій публічний канал
+const CHANNEL_USERNAME = 'tsnug'; 
 
+// Ці сервіси вміють діставати відео-посилання з Телеграму
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
-    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
-    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
+    `https://openrss.org/t.me/${CHANNEL_USERNAME}`
 ];
 
-// Заглушка
-const DEFAULT_IMAGE = 'https://placehold.co/800x600/111/333?text=NO+IMAGE';
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/111/333?text=NEWS';
 
 // ==========================================
 // 🚀 ЗАВАНТАЖЕННЯ
@@ -28,10 +26,10 @@ const DEFAULT_IMAGE = 'https://placehold.co/800x600/111/333?text=NO+IMAGE';
 
 async function loadNews() {
     const container = document.getElementById('news-feed');
-    container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
+    container.innerHTML = '<div class="loading">Завантаження контенту...</div>';
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        // nocache щоб бачити нові пости
+        // nocache - щоб завжди свіже
         const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&nocache=${Date.now()}`;
 
         try {
@@ -47,67 +45,74 @@ async function loadNews() {
                 return; 
             }
         } catch (e) {
-            console.warn(`Дзеркало ${i} пропущено.`);
+            console.warn(`Спроба ${i} невдала.`);
         }
     }
 
-    container.innerHTML = `<div class="error">Помилка завантаження каналу @${CHANNEL_USERNAME}</div>`;
+    container.innerHTML = `<div class="error">Помилка доступу до @${CHANNEL_USERNAME}</div>`;
 }
 
 // ==========================================
-// 🧠 ОБРОБКА ДАНИХ
+// 🧠 ПАРСЕР (ВИТЯГУЄМО ВІДЕО)
 // ==========================================
 
 function parseTelegramPost(item) {
-    // 1. Шукаємо картинку для прев'ю
-    let imageSrc = item.enclosure?.link;
-    if (!imageSrc) {
-        const imgRegex = /src="([^"]+)"/;
-        const match = item.description.match(imgRegex);
-        if (match) imageSrc = match[1];
-    }
-    if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
-    
-    // Якщо це відео-файл в RSS, ставимо заглушку для прев'ю
-    // (Але всередині модалки ми покажемо реальне відео)
-    let isVideo = false;
-    if (imageSrc && (imageSrc.includes('.mp4') || imageSrc.includes('video'))) {
-        isVideo = true;
-        imageSrc = DEFAULT_IMAGE; 
-    }
-    
-    // Проксі для картинок прев'ю
-    if (imageSrc && !imageSrc.includes('placehold') && !imageSrc.includes('wsrv.nl')) {
-        imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
-    }
-    
-    if (!imageSrc) imageSrc = DEFAULT_IMAGE;
+    let imageSrc = DEFAULT_IMAGE;
+    let videoSrc = null;
 
-    // Текст
+    // 1. Створюємо віртуальний елемент, щоб прочитати HTML поста
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
+
+    // 2. Шукаємо ВІДЕО (тег <video>)
+    let videoTag = tempDiv.querySelector('video');
+    if (videoTag && videoTag.src) {
+        videoSrc = videoTag.src; // Оце пряме посилання на mp4!
+    }
+
+    // 3. Шукаємо КАРТИНКУ
+    // Спочатку пробуємо знайти постер відео або картинку в enclosure
+    if (item.enclosure?.link && !item.enclosure.link.includes('mp4')) {
+        imageSrc = item.enclosure.link;
+    } 
+    // Якщо немає, шукаємо в <img> тегах
+    else {
+        let imgTag = tempDiv.querySelector('img');
+        if (imgTag) imageSrc = imgTag.src;
+    }
+
+    // Якщо це відео, але картинки-прев'ю немає - ставимо заглушку або thumbnail
+    if (videoSrc && imageSrc === DEFAULT_IMAGE && item.thumbnail) {
+        imageSrc = item.thumbnail;
+    }
+
+    // Проксіювання картинки (щоб не було битих)
+    if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
+        imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
+    }
+
+    // Текст
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
-    
-    if (!cleanText) cleanText = isVideo ? "Натисни, щоб подивитись відео" : "";
+    if (!cleanText) cleanText = videoSrc ? "Дивитись відео" : "";
 
     // Дата
     const dateObj = new Date(item.pubDate);
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
 
     return {
-        title: item.title && !item.title.startsWith('http') ? item.title : "Без заголовка",
-        short: cleanText.substring(0, 100) + "...",
+        title: item.title && !item.title.startsWith('http') ? item.title : "Новина",
+        short: cleanText.substring(0, 80) + "...",
         full: cleanText,
         image: imageSrc,
+        video: videoSrc, // Якщо null - це фото-пост, якщо є посилання - це відео
         date: dateStr,
-        link: item.link, // https://t.me/channel/123
-        isVideo: isVideo
+        link: item.link
     };
 }
 
 // ==========================================
-// 🎨 ІНТЕРФЕЙС (СТРІЧКА)
+// 🎨 КАРТКА
 // ==========================================
 
 function createCard(newsItem) {
@@ -116,8 +121,14 @@ function createCard(newsItem) {
     card.className = 'news-card';
     card.onclick = () => openModal(newsItem);
 
+    // Якщо це відео - додаємо значок
+    const badge = newsItem.video ? '<div class="video-badge">▶ ВІДЕО</div>' : '';
+
     card.innerHTML = `
-        <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
+        <div style="position:relative;">
+            <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
+            ${badge}
+        </div>
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
             <p class="card-desc">${newsItem.short}</p>
@@ -128,40 +139,39 @@ function createCard(newsItem) {
 }
 
 // ==========================================
-// 📱 МОДАЛЬНЕ ВІКНО (ПЛЕЄР)
+// 🎬 ПЛЕЄР (МОДАЛКА)
 // ==========================================
 
 function openModal(newsItem) {
     const mediaContainer = document.getElementById('media-container');
-    mediaContainer.innerHTML = ''; // Чистимо
+    mediaContainer.innerHTML = ''; // Очистка
 
-    // --- ЛОГІКА ВІДЕО/ФОТО ---
-    
-    // Розбираємо посилання, щоб отримати channel/id
-    const linkParts = newsItem.link.split('t.me/');
-    const postAddress = linkParts.length > 1 ? linkParts[1] : null;
-
-    if (postAddress) {
-        // Ми використовуємо IFRAME замість віджета. Це виглядає як рідний плеєр.
-        // embed=1 : режим вбудовування
-        // dark=1 : темна тема
-        // single=1 : показувати тільки це медіа (без сусідніх постів)
-        const iframe = document.createElement('iframe');
-        iframe.src = `https://t.me/${postAddress}?embed=1&dark=1&single=1`;
-        iframe.className = 'telegram-iframe';
-        iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('allowfullscreen', 'true'); // Дозволити повний екран
+    // ЛОГІКА ВИБОРУ ПЛЕЄРА
+    if (newsItem.video) {
+        // --- ВАРІАНТ 1: ВІДЕО ---
+        // Створюємо рідний HTML5 плеєр
+        const video = document.createElement('video');
+        video.className = 'app-video';
+        video.src = newsItem.video;
+        video.controls = true;   // Показуємо кнопки паузи/гучності
+        video.autoplay = true;   // Автостарт
+        video.playsInline = true; // Важливо для iPhone
+        video.loop = true;       // Зациклити
         
-        mediaContainer.appendChild(iframe);
+        // Обробка помилки відео (якщо посилання застаріло)
+        video.onerror = () => {
+            mediaContainer.innerHTML = '<p style="color:#666; padding:20px;">Відео недоступне для прямого перегляду</p>';
+        };
+        
+        mediaContainer.appendChild(video);
     } else {
-        // Якщо раптом посилання бите - показуємо просто картинку
+        // --- ВАРІАНТ 2: ФОТО ---
         const img = document.createElement('img');
+        img.className = 'app-image';
         img.src = newsItem.image;
-        img.className = 'modal-full-img';
         mediaContainer.appendChild(img);
     }
 
-    // Текстові дані
     document.getElementById('modal-title').innerText = newsItem.title;
     document.getElementById('modal-date').innerText = newsItem.date;
     document.getElementById('modal-text').innerText = newsItem.full;
@@ -174,12 +184,12 @@ function openModal(newsItem) {
 
 function closeModal() {
     document.getElementById('news-modal').classList.remove('active');
-    // Очищаємо контейнер, щоб відео зупинилось (важливо!)
-    setTimeout(() => {
-        document.getElementById('media-container').innerHTML = '';
-    }, 300);
+    
+    // Зупиняємо відео при закритті
+    const mediaContainer = document.getElementById('media-container');
+    mediaContainer.innerHTML = ''; 
+    
     tg.BackButton.hide();
 }
 
-// Запуск
 loadNews();
