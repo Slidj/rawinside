@@ -11,8 +11,8 @@ body {
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
     
-    /* 🔥 ВИПРАВЛЕННЯ: Збільшив відступ до 110px 🔥 */
-    padding-top: 110px; 
+    /* 🔥 ВИПРАВЛЕННЯ: Збільшив відступ до 140px (для надійності) 🔥 */
+    padding-top: 140px; 
     padding-bottom: 40px;
 }
 
@@ -20,12 +20,12 @@ body {
 .header {
     position: fixed; 
     top: 0; left: 0; width: 100%;
-    /* 🔥 ВИПРАВЛЕННЯ: Висота шапки теж 110px 🔥 */
-    height: 110px; 
+    /* 🔥 ВИПРАВЛЕННЯ: Висота шапки теж 140px 🔥 */
+    height: 140px; 
     
     /* Текст притиснутий до низу шапки */
     display: flex; align-items: flex-end; 
-    padding: 15px 20px 20px 20px; /* Більше відступу знизу */
+    padding: 15px 20px 20px 20px; 
     
     background: rgba(10, 14, 23, 0.85); 
     backdrop-filter: blur(20px);
