@@ -9,7 +9,7 @@ document.body.style.backgroundColor = '#000000';
 // ==========================================
 
 // Твій канал
-const CHANNEL_USERNAME = 'tsnug'; 
+const CHANNEL_USERNAME = 'rawinside_news'; 
 
 // Змінив порядок: i-c-a.su краще працює з відео
 const RSS_SERVICES = [
