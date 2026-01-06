@@ -11,7 +11,7 @@ document.body.style.color = '#ffffff';
 // ==========================================
 
 // Спробуй канал 'tsnug' або свій власний
-const CHANNEL_USERNAME = 'tsnug'; 
+const CHANNEL_USERNAME = 'ssternenko'; 
 
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
