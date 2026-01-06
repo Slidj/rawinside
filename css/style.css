@@ -1,44 +1,73 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* --- ОСНОВНИЙ ФОН --- */
 body {
     margin: 0; padding: 0;
-    background-color: #000;
-    color: white;
+    /* Темно-синій матовий градієнт */
+    background: linear-gradient(135deg, #0a0e17 0%, #141e30 100%);
+    color: #ffffff;
     font-family: 'Inter', sans-serif;
-    padding-bottom: 50px;
+    min-height: 100vh;
+    padding-bottom: 40px; /* Відступ знизу */
 }
 
-/* ШАПКА */
+/* --- ШАПКА (Ефект скла) --- */
 .header {
     padding: 15px 20px;
     position: sticky; top: 0; z-index: 10;
-    background: rgba(0,0,0,0.8);
+    /* Напівпрозорий синій фон */
+    background: rgba(10, 14, 23, 0.7);
+    /* ГОЛОВНИЙ ЕФЕКТ: Розмиття фону під шапкою */
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid #222;
+    -webkit-backdrop-filter: blur(20px); /* Для Safari */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Тонка рамка */
 }
-.header h1 { margin: 0; font-size: 1.2rem; }
+.header h1 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.5px; }
 
-/* СТРІЧКА */
-.news-container { padding: 0; }
-.loading, .error { padding: 50px; text-align: center; color: #666; font-size: 0.9rem; }
+/* --- СТРІЧКА НОВИН --- */
+.news-container {
+    padding: 20px; /* Відступи збоку для карток */
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Відстань між картками */
+}
 
-/* КАРТКА */
+.loading, .error {
+    padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem;
+}
+
+/* --- КАРТКА НОВИНИ (Скляний ефект) --- */
 .news-card {
-    border-bottom: 1px solid #1a1a1a;
-    padding-bottom: 20px; margin-bottom: 20px;
+    /* Напівпрозорий фон картки */
+    background: rgba(255, 255, 255, 0.05);
+    /* Розмиття фону під карткою */
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    /* Красива тонка рамка */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* Закруглені кути */
+    border-radius: 20px;
+    overflow: hidden; /* Щоб картинка не вилазила за кути */
     cursor: pointer;
-    position: relative;
+    transition: transform 0.2s, background 0.2s;
+    /* М'яка тінь для глибини */
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
-.news-card:active { opacity: 0.7; }
 
-/* Медіа в стрічці */
+/* Ефект при натисканні */
+.news-card:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Контейнер для медіа в картці */
 .card-media-wrapper {
     position: relative;
     width: 100%;
-    aspect-ratio: 16/9;
-    background: #111;
+    aspect-ratio: 16/9; /* Кіношний формат */
+    background: rgba(0,0,0,0.3);
 }
 
 .card-media {
@@ -46,70 +75,76 @@ body {
     object-fit: cover; display: block;
 }
 
-/* Значок ВІДЕО у стрічці */
+/* Значок Play (залишаємо як було, він гарний) */
 .play-icon-overlay {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: 50px; height: 50px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(10, 14, 23, 0.6); /* Темніший фон */
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(5px);
     border: 2px solid rgba(255,255,255,0.8);
 }
-.play-icon-overlay::after {
-    content: '▶';
-    font-size: 20px; color: white;
-    margin-left: 4px; /* центрування трикутника */
-}
+.play-icon-overlay::after { content: '▶'; font-size: 20px; color: white; margin-left: 4px; }
 
-.card-content { padding: 15px 15px 0 15px; }
-.card-title { margin: 0 0 8px 0; font-size: 1.1rem; font-weight: 700; line-height: 1.4; }
-.card-desc { margin: 0; font-size: 0.9rem; color: #aaa; line-height: 1.5; }
-.card-meta { margin-top: 10px; font-size: 0.75rem; color: #555; text-transform: uppercase; }
+.card-content { padding: 15px; }
+.card-title { margin: 0 0 8px 0; font-size: 1.1rem; font-weight: 700; line-height: 1.3; }
+.card-desc { margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.7); line-height: 1.5; }
+.card-meta { margin-top: 12px; font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
 
-/* МОДАЛКА */
+/* --- МОДАЛЬНЕ ВІКНО (Виїжджає знизу) --- */
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 100; background: #000;
-    transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+    z-index: 100;
+    background: rgba(10, 14, 23, 0.8); /* Затемнення фону */
+    backdrop-filter: blur(5px); /* Розмиття основного фону */
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
 }
-.modal-wrapper.active { transform: translateY(0); }
+.modal-wrapper.active { opacity: 1; pointer-events: auto; }
+
+.modal-sheet {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    height: 95%; /* Майже на весь екран */
+    /* Темно-синій фон модалки */
+    background: #0e1522;
+    border-top-left-radius: 24px; border-top-right-radius: 24px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+}
+.modal-wrapper.active .modal-sheet { transform: translateY(0); }
 
 .close-btn {
-    position: absolute; top: 20px; right: 20px;
-    width: 40px; height: 40px;
-    background: rgba(0,0,0,0.5); border: none; border-radius: 50%;
-    color: #fff; font-size: 1.2rem; z-index: 20; cursor: pointer;
+    position: absolute; top: 15px; right: 15px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.1); border: none; border-radius: 50%;
+    color: #fff; font-size: 1.1rem; z-index: 20; cursor: pointer;
 }
 
-.modal-content { height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
+.modal-content { overflow-y: auto; display: flex; flex-direction: column; height: 100%; }
 
-/* ПЛЕЄР */
+/* Плеєр у модалці */
 .media-wrapper {
     width: 100%; background: #000;
     display: flex; justify-content: center; align-items: center;
-    min-height: 250px; /* Мінімальна висота */
+    flex-shrink: 0; /* Щоб не стискався */
 }
 
-.app-video {
-    width: 100%; height: auto; max-height: 80vh;
-    display: block; outline: none; background: #000;
-}
-.app-image {
-    width: 100%; height: auto; max-height: 60vh;
-    object-fit: contain;
-}
+.app-video { width: 100%; max-height: 70vh; display: block; background: #000; }
+.app-image { width: 100%; max-height: 60vh; object-fit: contain; }
 
-.text-content { padding: 20px; padding-bottom: 80px; }
-#modal-title { font-size: 1.5rem; margin: 0 0 10px 0; }
-.full-text { font-size: 1rem; line-height: 1.6; color: #ccc; white-space: pre-wrap; }
+.text-content { padding: 25px; padding-bottom: 80px; background: #0e1522; flex-grow: 1;}
+#modal-title { font-size: 1.6rem; margin: 0 0 10px 0; line-height: 1.2; }
+.full-text { font-size: 1.05rem; line-height: 1.6; color: rgba(255,255,255,0.8); white-space: pre-wrap; }
+.news-date { color: rgba(255,255,255,0.5); display: block; margin-bottom: 20px; }
 
 .app-btn {
     display: block; width: 100%; text-align: center;
-    background: #222; color: #fff;
-    padding: 16px; border-radius: 12px;
+    /* Синя кнопка */
+    background: #1e40af; color: #fff;
+    padding: 16px; border-radius: 16px;
     text-decoration: none; font-weight: 700; margin-top: 30px;
 }
