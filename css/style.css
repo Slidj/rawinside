@@ -4,7 +4,7 @@
 
 body {
     margin: 0; padding: 0;
-    background-color: #0f0f11; /* Темний фон */
+    background-color: #0f0f11;
     color: white;
     font-family: 'Inter', sans-serif;
     padding-bottom: 50px;
@@ -25,17 +25,22 @@ body {
 /* News List */
 .news-container { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 
+.loading, .error {
+    text-align: center; padding: 30px;
+    color: #888; font-size: 0.9rem;
+}
+
 /* Картка новини */
 .news-card {
     background: #1c1c1e;
     border-radius: 16px;
     overflow: hidden;
-    display: flex; /* Картинка зліва, текст справа */
+    display: flex;
     gap: 15px;
     padding: 12px;
     cursor: pointer;
-    transition: transform 0.1s;
     border: 1px solid #2c2c2e;
+    transition: transform 0.1s;
 }
 .news-card:active { transform: scale(0.98); background: #2c2c2e; }
 
@@ -44,69 +49,63 @@ body {
     border-radius: 10px;
     object-fit: cover;
     flex-shrink: 0;
+    background: #2a2a2e;
 }
 
 .card-content { display: flex; flex-direction: column; justify-content: center; }
-.card-title { margin: 0 0 5px 0; font-size: 1rem; font-weight: 700; line-height: 1.3; }
-.card-desc { margin: 0; font-size: 0.85rem; color: #999; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-title { margin: 0 0 5px 0; font-size: 0.95rem; font-weight: 700; line-height: 1.3; }
+.card-desc { margin: 0; font-size: 0.8rem; color: #999; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-time { font-size: 0.7rem; color: #555; margin-top: 5px; }
 
 /* --- MODAL (BOTTOM SHEET) --- */
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 100;
-    visibility: hidden; /* Сховано */
-    transition: visibility 0.3s;
+    z-index: 100; visibility: hidden; transition: visibility 0.3s;
 }
-
-/* Затемнення фону */
 .modal-backdrop {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.6);
-    opacity: 0; transition: opacity 0.3s;
+    background: rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.3s;
 }
-
-/* Саме вікно */
 .modal-sheet {
     position: absolute; bottom: 0; left: 0; width: 100%;
-    height: 85vh; /* Займає 85% висоти екрану */
+    height: 90vh; /* Висота вікна */
     background: #1c1c1e;
-    border-top-left-radius: 24px;
-    border-top-right-radius: 24px;
-    transform: translateY(100%); /* Засунуто вниз */
+    border-top-left-radius: 24px; border-top-right-radius: 24px;
+    transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     display: flex; flex-direction: column;
     box-shadow: 0 -5px 30px rgba(0,0,0,0.5);
 }
 
-/* Активний стан (коли відкрито) */
 .modal-wrapper.active { visibility: visible; }
 .modal-wrapper.active .modal-backdrop { opacity: 1; }
 .modal-wrapper.active .modal-sheet { transform: translateY(0); }
 
-/* Ручка для перетягування */
 .drag-handle {
     width: 40px; height: 5px; background: #444;
-    border-radius: 10px; margin: 15px auto;
-    flex-shrink: 0;
+    border-radius: 10px; margin: 15px auto; flex-shrink: 0;
 }
 
 .modal-content {
-    overflow-y: auto; /* Скрол всередині вікна */
-    padding-bottom: 40px;
+    overflow-y: auto; padding: 0 20px 40px 20px;
+    display: flex; flex-direction: column;
 }
 
-.modal-image { width: 100%; height: 250px; object-fit: cover; }
-.modal-body { padding: 20px; }
-.news-tag { color: #3b82f6; font-size: 0.8rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-.news-date { color: #666; font-size: 0.8rem; margin-left: 10px; }
+.modal-header-info { margin-bottom: 10px; margin-top: 10px; }
+.news-date { color: #666; font-size: 0.8rem; }
+#modal-title { font-size: 1.5rem; margin: 0 0 20px 0; line-height: 1.3; }
 
-#modal-title { font-size: 1.8rem; margin: 10px 0; line-height: 1.2; }
-.full-text { font-size: 1.1rem; line-height: 1.6; color: #ddd; white-space: pre-line; /* Зберігає абзаци */ }
+/* Стиль для контейнера віджета */
+#telegram-widget-container {
+    width: 100%;
+    min-height: 150px;
+    display: flex; justify-content: center;
+    margin-bottom: 20px;
+}
 
 .read-more-btn {
     display: block; width: 100%; text-align: center;
     background: #007aff; color: white;
     padding: 15px; border-radius: 14px;
     text-decoration: none; font-weight: 600;
-    margin-top: 20px;
-  }
+}
