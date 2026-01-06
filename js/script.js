@@ -10,119 +10,107 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Прямі посилання на RSS (без rss2json)
-const RSS_URLS = [
-    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
+// Класичний набір дзеркал
+const RSS_BRIDGES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
 ];
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (DIRECT XML)
+// 🚀 ЗАВАНТАЖЕННЯ (SAFE MODE)
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
     if (!isBackground) {
-        container.innerHTML = '<div class="loading">Завантаження...</div>';
+        container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    // Унікальне число (мілісекунди), щоб проксі не віддавав старе
-    const cacheBuster = Date.now();
+    // 🔥 БЕЗПЕЧНИЙ АНТИ-КЕШ 🔥
+    // Змінюємо запит тільки раз на хвилину, а не щоразу.
+    // Це не дратує сервери і вони не блокують нас.
+    const safeTimestamp = Math.floor(Date.now() / 60000); 
 
-    for (let i = 0; i < RSS_URLS.length; i++) {
-        // Використовуємо AllOrigins RAW - він просто передає файл як є, не намагаючись його обробляти чи кешувати надовго
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(RSS_URLS[i])}&rand=${cacheBuster}`;
+    for (let i = 0; i < RSS_BRIDGES.length; i++) {
+        // Запит без API ключа (ліміти менші, але не блокують)
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_BRIDGES[i])}&time_token=${safeTimestamp}`;
 
         try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
-            
-            const strXML = await response.text();
-            
-            // Парсимо XML прямо в браузері
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(strXML, "text/xml");
-            
-            // Перевіряємо, чи є помилки парсингу
-            if (xmlDoc.querySelector("parsererror")) throw new Error('XML Parse Error');
+            const response = await fetch(apiUrl);
+            const data = await response.json();
 
-            const items = xmlDoc.querySelectorAll("item");
-
-            if (items.length > 0) {
+            if (data.status === 'ok' && data.items.length > 0) {
                 container.innerHTML = ''; 
                 
-                items.forEach(item => {
+                data.items.forEach(item => {
                     try {
-                        const parsedItem = parseXMLPost(item);
+                        const parsedItem = parseTelegramPost(item);
                         if (parsedItem) createCard(parsedItem);
                     } catch (err) {
-                        console.error("Помилка обробки поста:", err);
+                        console.error("Пропуск збійного поста", err);
                     }
                 });
                 
                 if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
-                return; // Успіх!
+                return; // Все добре, виходимо
             }
         } catch (e) {
-            console.warn(`Дзеркало ${i} пропущено:`, e.message);
+            console.warn(`Дзеркало ${i} мовчить.`);
         }
     }
 
     if (!isBackground) {
         container.innerHTML = `
             <div class="error">
-                <p>Оновлення...</p>
-                <small style="opacity:0.5">Всі сервери зайняті</small>
+                <p>Сервери тимчасово недоступні</p>
+                <small style="opacity:0.5">Зачекайте 1-2 хвилини</small>
             </div>`;
-        // Не вібруємо помилкою, щоб не дратувати, просто чекаємо наступного таймера
+        tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// Запуск (оновлення кожні 60 секунд)
+// Запускаємо
 loadNews(false);
-setInterval(() => { loadNews(true); }, 60000); 
+// Оновлюємо рідше (раз на 3 хвилини), щоб зняти бан
+setInterval(() => { loadNews(true); }, 180000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР XML (ПОТУЖНИЙ)
+// 🧠 ПАРСЕР (Виправлено альбоми)
 // ==========================================
 
-function parseXMLPost(xmlItem) {
-    // Допоміжна функція для безпечного отримання тексту тегу
-    const getTag = (name) => {
-        const el = xmlItem.querySelector(name);
-        return el ? (el.textContent || el.innerHTML) : "";
-    };
-
-    let title = getTag("title");
-    let link = getTag("link");
-    let pubDate = getTag("pubDate");
-    let description = getTag("description");
-
+function parseTelegramPost(item) {
     let imageSrc = null;
     let videoSrc = null;
-
-    // Створюємо тимчасовий елемент
-    let tempDiv = document.createElement("div");
-    tempDiv.innerHTML = description;
-
-    // --- ПОШУК МЕДІА (XML Enclosure) ---
-    const enclosures = xmlItem.querySelectorAll("enclosure");
     
-    // Перебираємо всі вкладення (для альбомів)
-    enclosures.forEach(enc => {
-        const type = enc.getAttribute("type");
-        const url = enc.getAttribute("url");
-        
-        if (type && type.includes("video") && !videoSrc) videoSrc = url;
-        if (type && type.includes("image") && !imageSrc) imageSrc = url;
-    });
+    let tempDiv = document.createElement("div");
+    tempDiv.innerHTML = item.description || "";
 
-    // --- ПОШУК В HTML (Якщо в XML пусто) ---
+    // --- ОБРОБКА АЛЬБОМІВ ---
+    let enclosure = item.enclosure;
+    
+    // Якщо прийшов масив файлів (альбом)
+    if (Array.isArray(enclosure) && enclosure.length > 0) {
+        // Шукаємо відео
+        let vid = enclosure.find(e => e.type.includes('video'));
+        // Шукаємо картинку
+        let img = enclosure.find(e => e.type.includes('image'));
+        
+        // Якщо є відео - беремо його, якщо ні - картинку, якщо ні - перший файл
+        enclosure = vid || img || enclosure[0];
+    }
+
+    // Витягуємо посилання з фінального об'єкту enclosure
+    if (enclosure && enclosure.type) {
+        if (enclosure.type.includes('video')) videoSrc = enclosure.link;
+        if (enclosure.type.includes('image')) imageSrc = enclosure.link;
+    }
+
+    // Якщо нічого не знайшли, шукаємо в HTML
     if (!videoSrc) {
         let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
@@ -131,19 +119,14 @@ function parseXMLPost(xmlItem) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
-
-    // Regex
-    if (!imageSrc) {
-        const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
-        const match = description.match(imgRegex);
-        if (match) imageSrc = match[1];
-    }
+    // Thumbnail
+    if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
 
     // Заглушки
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксі зображень
+    // Проксі
     if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
@@ -158,14 +141,15 @@ function parseXMLPost(xmlItem) {
         else cleanText = "Новина";
     }
 
+    // Чистка
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
     
+    // Заголовок
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
 
-    // Дата
-    const dateObj = new Date(pubDate);
+    const dateObj = new Date(item.pubDate);
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
@@ -174,7 +158,7 @@ function parseXMLPost(xmlItem) {
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
-        link: link
+        link: item.link
     };
 }
 
