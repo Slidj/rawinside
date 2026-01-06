@@ -2,23 +2,22 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.enableClosingConfirmation();
 
+// Встановлюємо темно-синій колір фону для Телеграм
 document.body.style.backgroundColor = '#0a0e17';
 
 // ==========================================
 // ⚙️ НАЛАШТУВАННЯ
 // ==========================================
 
-// ✅ Твій канал
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// ✅ Порядок важливий! rsshub найкраще працює з відео
 const RSS_SERVICES = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`
 ];
 
-const DEFAULT_IMAGE = 'https://placehold.co/800x400/111/333?text=NEWS';
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=NEWS';
 
 // ==========================================
 // 🚀 ЗАВАНТАЖЕННЯ
@@ -29,7 +28,6 @@ async function loadNews() {
     container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        // nocache - щоб завжди свіже
         const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&nocache=${Date.now()}`;
 
         try {
@@ -59,56 +57,44 @@ async function loadNews() {
 function parseTelegramPost(item) {
     let imageSrc = null;
     let videoSrc = null;
-
-    // 1. Створюємо віртуальний елемент
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
 
-    // --- ЛОГІКА ПОШУКУ ВІДЕО ---
-    
-    // А) Шукаємо в enclosure (стандарт RSS)
+    // 1. Пошук ВІДЕО
     if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('video/')) {
         videoSrc = item.enclosure.link;
     }
-    
-    // Б) Шукаємо тег <video> в описі
     if (!videoSrc) {
         let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
 
-    // --- ЛОГІКА ПОШУКУ КАРТИНКИ (для прев'ю) ---
-    
-    // А) Шукаємо в enclosure (якщо це картинка)
+    // 2. Пошук КАРТИНКИ
     if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
         imageSrc = item.enclosure.link;
     }
-    
-    // Б) Шукаємо <img> тег
     if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
-    
-    // В) Якщо нічого немає, беремо thumbnail
     if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
-    
-    // Г) Якщо є відео, але немає картинки - ставимо заглушку для прев'ю
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
-    
-    // Д) Фінал - заглушка
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксіювання картинки (wsrv.nl для швидкості і обходу блоку)
-    // НЕ проксіюємо відео! Тільки картинки.
+    // Проксі для картинок
     if (imageSrc && !imageSrc.includes('wsrv.nl') && !imageSrc.includes('placehold')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // Текст
+    // 3. ТЕКСТ (Обрізка до 3-х слів)
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
     if (!cleanText) cleanText = videoSrc ? "Дивитись відео" : "";
+
+    // 🔥 ЛОГІКА СКОРОЧЕННЯ: 3 слова + три крапки
+    let words = cleanText.split(/\s+/);
+    let shortText = words.slice(0, 3).join(' ');
+    if (words.length > 3) shortText += "...";
 
     // Дата
     const dateObj = new Date(item.pubDate);
@@ -116,8 +102,8 @@ function parseTelegramPost(item) {
 
     return {
         title: item.title && !item.title.startsWith('http') ? item.title : "Новина",
-        short: cleanText.substring(0, 80) + "...",
-        full: cleanText,
+        short: shortText, // Короткий текст
+        full: cleanText,  // Повний текст (для модалки)
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
@@ -135,7 +121,6 @@ function createCard(newsItem) {
     card.className = 'news-card';
     card.onclick = () => openModal(newsItem);
 
-    // Показуємо значок Play, якщо це відео
     const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
 
     card.innerHTML = `
@@ -153,7 +138,7 @@ function createCard(newsItem) {
 }
 
 // ==========================================
-// 🎬 ПЛЕЄР (МОДАЛКА)
+// 🎬 ПЛЕЄР
 // ==========================================
 
 function openModal(newsItem) {
@@ -161,31 +146,21 @@ function openModal(newsItem) {
     mediaContainer.innerHTML = ''; 
 
     if (newsItem.video) {
-        // --- ВІДЕО ---
         const video = document.createElement('video');
         video.className = 'app-video';
         video.src = newsItem.video;
-        
-        // Автостарт БЕЗ звуку (вимога браузерів)
         video.muted = true;
         video.autoplay = true;
         video.playsInline = true; 
         video.loop = true;
-        video.controls = true; // Користувач сам ввімкне звук
+        video.controls = true; 
         
-        // 🔥 ЗАХИСТ ВІД ПОМИЛКИ "PROTECTED" 🔥
-        // Якщо відео не вантажиться (403 помилка), міняємо на картинку
         video.onerror = () => {
-            console.log("Відео не вдалося завантажити, показуємо фото.");
-            mediaContainer.innerHTML = ''; // Видаляємо бите відео
-            
-            // Створюємо картинку замість відео
+            mediaContainer.innerHTML = ''; 
             const fallbackImg = document.createElement('img');
             fallbackImg.className = 'app-image';
-            fallbackImg.src = newsItem.image; // Беремо прев'ю
+            fallbackImg.src = newsItem.image;
             mediaContainer.appendChild(fallbackImg);
-            
-            // Додаємо напис
             const msg = document.createElement('p');
             msg.style.color = '#aaa';
             msg.style.textAlign = 'center';
@@ -193,10 +168,8 @@ function openModal(newsItem) {
             msg.innerText = '(Відео доступне в каналі)';
             mediaContainer.appendChild(msg);
         };
-        
         mediaContainer.appendChild(video);
     } else {
-        // --- ФОТО ---
         const img = document.createElement('img');
         img.className = 'app-image';
         img.src = newsItem.image;
@@ -215,7 +188,6 @@ function openModal(newsItem) {
 
 function closeModal() {
     document.getElementById('news-modal').classList.remove('active');
-    // Зупиняємо відео
     setTimeout(() => { document.getElementById('media-container').innerHTML = ''; }, 300);
     tg.BackButton.hide();
 }
