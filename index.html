@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>News App</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Crypto News ⚡</h1>
+        <span class="date" id="current-date">Сьогодні</span>
+    </div>
+
+    <div id="news-feed" class="news-container">
+        </div>
+
+    <div id="news-modal" class="modal-wrapper">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
+        
+        <div class="modal-sheet">
+            <div class="drag-handle" onclick="closeModal()"></div>
+            
+            <div class="modal-content">
+                <img id="modal-img" src="" alt="News Image" class="modal-image">
+                <div class="modal-body">
+                    <span id="modal-tag" class="news-tag">CRYPTO</span>
+                    <span id="modal-date" class="news-date">10:45</span>
+                    <h2 id="modal-title">Заголовок новини</h2>
+                    <p id="modal-text" class="full-text">
+                        Тут буде повний текст новини...
+                    </p>
+                    
+                    <a href="#" id="modal-link" target="_blank" class="read-more-btn">
+                        Читати в каналі ✈️
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
