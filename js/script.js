@@ -8,17 +8,17 @@ document.body.style.backgroundColor = '#000000';
 // ⚙️ НАЛАШТУВАННЯ
 // ==========================================
 
-// Твій канал
+// ✅ Твій канал
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Змінив порядок: i-c-a.su краще працює з відео
+// ✅ Порядок важливий! rsshub найкраще працює з відео
 const RSS_SERVICES = [
-    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`, 
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`
 ];
 
-const DEFAULT_IMAGE = 'https://placehold.co/800x400/111/333?text=NO+IMAGE';
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/111/333?text=NEWS';
 
 // ==========================================
 // 🚀 ЗАВАНТАЖЕННЯ
@@ -49,45 +49,58 @@ async function loadNews() {
         }
     }
 
-    container.innerHTML = `<div class="error">Помилка завантаження каналу @${CHANNEL_USERNAME}</div>`;
+    container.innerHTML = `<div class="error">Помилка завантаження @${CHANNEL_USERNAME}</div>`;
 }
 
 // ==========================================
-// 🧠 ПАРСЕР (ВИТЯГУЄМО ВІДЕО)
+// 🧠 ПАРСЕР
 // ==========================================
 
 function parseTelegramPost(item) {
-    let imageSrc = DEFAULT_IMAGE;
+    let imageSrc = null;
     let videoSrc = null;
 
     // 1. Створюємо віртуальний елемент
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
 
-    // 2. Шукаємо ВІДЕО (тег <video>) або enclosure типу video/mp4
-    let videoTag = tempDiv.querySelector('video');
-    if (videoTag && videoTag.src) {
-        videoSrc = videoTag.src;
-    } 
-    // Перевірка через RSS enclosure (надійніше)
-    else if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('video')) {
+    // --- ЛОГІКА ПОШУКУ ВІДЕО ---
+    
+    // А) Шукаємо в enclosure (стандарт RSS)
+    if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('video/')) {
         videoSrc = item.enclosure.link;
     }
+    
+    // Б) Шукаємо тег <video> в описі
+    if (!videoSrc) {
+        let videoTag = tempDiv.querySelector('video');
+        if (videoTag && videoTag.src) videoSrc = videoTag.src;
+    }
 
-    // 3. Шукаємо КАРТИНКУ
-    if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('image')) {
+    // --- ЛОГІКА ПОШУКУ КАРТИНКИ (для прев'ю) ---
+    
+    // А) Шукаємо в enclosure (якщо це картинка)
+    if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
         imageSrc = item.enclosure.link;
-    } else {
+    }
+    
+    // Б) Шукаємо <img> тег
+    if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
     
-    // Якщо картинки немає, а є thumbnail від RSS
-    if ((!imageSrc || imageSrc === DEFAULT_IMAGE) && item.thumbnail) {
-        imageSrc = item.thumbnail;
-    }
+    // В) Якщо нічого немає, беремо thumbnail
+    if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
+    
+    // Г) Якщо є відео, але немає картинки - ставимо заглушку для прев'ю
+    if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
+    
+    // Д) Фінал - заглушка
+    if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксіювання картинки (щоб не було битих)
+    // Проксіювання картинки (wsrv.nl для швидкості і обходу блоку)
+    // НЕ проксіюємо відео! Тільки картинки.
     if (imageSrc && !imageSrc.includes('wsrv.nl') && !imageSrc.includes('placehold')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
@@ -122,12 +135,13 @@ function createCard(newsItem) {
     card.className = 'news-card';
     card.onclick = () => openModal(newsItem);
 
-    const badge = newsItem.video ? '<div class="video-badge">▶ ВІДЕО</div>' : '';
+    // Показуємо значок Play, якщо це відео
+    const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
 
     card.innerHTML = `
-        <div style="position:relative;">
+        <div class="card-media-wrapper">
             <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
-            ${badge}
+            ${playOverlay}
         </div>
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
@@ -139,7 +153,7 @@ function createCard(newsItem) {
 }
 
 // ==========================================
-// 🎬 ПЛЕЄР (ВИПРАВЛЕНО АВТОСТАРТ)
+// 🎬 ПЛЕЄР (МОДАЛКА)
 // ==========================================
 
 function openModal(newsItem) {
@@ -147,39 +161,37 @@ function openModal(newsItem) {
     mediaContainer.innerHTML = ''; 
 
     if (newsItem.video) {
-        // --- ВІДЕО ПЛЕЄР ---
+        // --- ВІДЕО ---
         const video = document.createElement('video');
         video.className = 'app-video';
         video.src = newsItem.video;
         
-        // 🔥 ВАЖЛИВІ НАЛАШТУВАННЯ ДЛЯ АВТОСТАРТУ 🔥
-        video.muted = true;       // Без звуку (обов'язково для автостарту!)
-        video.autoplay = true;    // Автостарт
-        video.playsInline = true; // Не відкривати на весь екран в iOS
-        video.loop = true;        // По колу
-        video.controls = true;    // Показувати кнопки (щоб увімкнути звук)
+        // Автостарт БЕЗ звуку (вимога браузерів)
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true; 
+        video.loop = true;
+        video.controls = true; // Користувач сам ввімкне звук
         
-        // Спроба запустити
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.log("Автостарт заблоковано браузером. Потрібен клік.");
-                // Можна показати кнопку Play поверх, але controls=true має вистачити
-            });
-        }
-
-        // Обробка помилки (якщо Телеграм не віддав файл)
+        // 🔥 ЗАХИСТ ВІД ПОМИЛКИ "PROTECTED" 🔥
+        // Якщо відео не вантажиться (403 помилка), міняємо на картинку
         video.onerror = () => {
-            console.error("Відео не вантажиться");
-            mediaContainer.innerHTML = `
-                <div style="position:relative; width:100%;">
-                    <img src="${newsItem.image}" class="app-image" style="opacity:0.5;">
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;">
-                        <p>Відео захищене</p>
-                        <a href="${newsItem.link}" target="_blank" class="app-btn" style="padding:10px; font-size:0.8rem; margin-top:5px;">Дивитись в каналі</a>
-                    </div>
-                </div>
-            `;
+            console.log("Відео не вдалося завантажити, показуємо фото.");
+            mediaContainer.innerHTML = ''; // Видаляємо бите відео
+            
+            // Створюємо картинку замість відео
+            const fallbackImg = document.createElement('img');
+            fallbackImg.className = 'app-image';
+            fallbackImg.src = newsItem.image; // Беремо прев'ю
+            mediaContainer.appendChild(fallbackImg);
+            
+            // Додаємо напис
+            const msg = document.createElement('p');
+            msg.style.color = '#aaa';
+            msg.style.textAlign = 'center';
+            msg.style.marginTop = '10px';
+            msg.innerText = '(Відео доступне в каналі)';
+            mediaContainer.appendChild(msg);
         };
         
         mediaContainer.appendChild(video);
@@ -203,9 +215,8 @@ function openModal(newsItem) {
 
 function closeModal() {
     document.getElementById('news-modal').classList.remove('active');
-    setTimeout(() => {
-        document.getElementById('media-container').innerHTML = '';
-    }, 300);
+    // Зупиняємо відео
+    setTimeout(() => { document.getElementById('media-container').innerHTML = ''; }, 300);
     tg.BackButton.hide();
 }
 
