@@ -10,28 +10,37 @@ body {
     color: #ffffff;
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
-    padding-bottom: 40px; /* Відступ знизу */
+    
+    /* 🔥 ВІДСТУП ЗВЕРХУ 80px (Щоб не лізти під системні кнопки) */
+    padding-top: 80px; 
+    padding-bottom: 40px;
 }
 
-/* --- ШАПКА (Ефект скла) --- */
+/* --- ШАПКА (Фіксована) --- */
 .header {
+    position: fixed; 
+    top: 0; left: 0; width: 100%;
+    height: 80px; /* Висота шапки */
+    
+    /* Вирівнювання тексту ближче до низу шапки */
+    display: flex; align-items: flex-end; 
     padding: 15px 20px;
-    position: sticky; top: 0; z-index: 10;
-    /* Напівпрозорий синій фон */
-    background: rgba(10, 14, 23, 0.7);
-    /* ГОЛОВНИЙ ЕФЕКТ: Розмиття фону під шапкою */
+    
+    /* Ефект синього матового скла */
+    background: rgba(10, 14, 23, 0.85); 
     backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px); /* Для Safari */
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Тонка рамка */
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 50; /* Щоб була поверх всього */
 }
 .header h1 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.5px; }
 
 /* --- СТРІЧКА НОВИН --- */
 .news-container {
-    padding: 20px; /* Відступи збоку для карток */
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px; /* Відстань між картками */
+    gap: 20px;
 }
 
 .loading, .error {
@@ -40,33 +49,27 @@ body {
 
 /* --- КАРТКА НОВИНИ (Скляний ефект) --- */
 .news-card {
-    /* Напівпрозорий фон картки */
     background: rgba(255, 255, 255, 0.05);
-    /* Розмиття фону під карткою */
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
-    /* Красива тонка рамка */
     border: 1px solid rgba(255, 255, 255, 0.1);
-    /* Закруглені кути */
     border-radius: 20px;
-    overflow: hidden; /* Щоб картинка не вилазила за кути */
+    overflow: hidden;
     cursor: pointer;
-    transition: transform 0.2s, background 0.2s;
-    /* М'яка тінь для глибини */
+    transition: transform 0.2s;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
-/* Ефект при натисканні */
 .news-card:active {
     transform: scale(0.98);
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Контейнер для медіа в картці */
+/* Медіа в стрічці */
 .card-media-wrapper {
     position: relative;
     width: 100%;
-    aspect-ratio: 16/9; /* Кіношний формат */
+    aspect-ratio: 16/9;
     background: rgba(0,0,0,0.3);
 }
 
@@ -75,11 +78,11 @@ body {
     object-fit: cover; display: block;
 }
 
-/* Значок Play (залишаємо як було, він гарний) */
+/* Значок Play */
 .play-icon-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: 50px; height: 50px;
-    background: rgba(10, 14, 23, 0.6); /* Темніший фон */
+    background: rgba(10, 14, 23, 0.6);
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(5px);
@@ -92,12 +95,12 @@ body {
 .card-desc { margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.7); line-height: 1.5; }
 .card-meta { margin-top: 12px; font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
 
-/* --- МОДАЛЬНЕ ВІКНО (Виїжджає знизу) --- */
+/* --- МОДАЛЬНЕ ВІКНО --- */
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     z-index: 100;
-    background: rgba(10, 14, 23, 0.8); /* Затемнення фону */
-    backdrop-filter: blur(5px); /* Розмиття основного фону */
+    background: rgba(10, 14, 23, 0.9);
+    backdrop-filter: blur(8px);
     opacity: 0; pointer-events: none;
     transition: opacity 0.3s;
 }
@@ -105,9 +108,8 @@ body {
 
 .modal-sheet {
     position: absolute; bottom: 0; left: 0; width: 100%;
-    height: 95%; /* Майже на весь екран */
-    /* Темно-синій фон модалки */
-    background: #0e1522;
+    height: 95%; /* Висота вікна */
+    background: #0e1522; /* Темно-синій фон всередині */
     border-top-left-radius: 24px; border-top-right-radius: 24px;
     transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -126,24 +128,22 @@ body {
 
 .modal-content { overflow-y: auto; display: flex; flex-direction: column; height: 100%; }
 
-/* Плеєр у модалці */
 .media-wrapper {
     width: 100%; background: #000;
     display: flex; justify-content: center; align-items: center;
-    flex-shrink: 0; /* Щоб не стискався */
+    flex-shrink: 0; min-height: 250px;
 }
 
 .app-video { width: 100%; max-height: 70vh; display: block; background: #000; }
 .app-image { width: 100%; max-height: 60vh; object-fit: contain; }
 
-.text-content { padding: 25px; padding-bottom: 80px; background: #0e1522; flex-grow: 1;}
+.text-content { padding: 25px; padding-bottom: 80px; background: #0e1522; flex-grow: 1; }
 #modal-title { font-size: 1.6rem; margin: 0 0 10px 0; line-height: 1.2; }
 .full-text { font-size: 1.05rem; line-height: 1.6; color: rgba(255,255,255,0.8); white-space: pre-wrap; }
 .news-date { color: rgba(255,255,255,0.5); display: block; margin-bottom: 20px; }
 
 .app-btn {
     display: block; width: 100%; text-align: center;
-    /* Синя кнопка */
     background: #1e40af; color: #fff;
     padding: 16px; border-radius: 16px;
     text-decoration: none; font-weight: 700; margin-top: 30px;
