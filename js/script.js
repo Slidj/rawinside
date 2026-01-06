@@ -10,33 +10,37 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// 🔥 РОЗШИРЕНИЙ СПИСОК ДЗЕРКАЛ (Backup System) 🔥
-// Якщо перше не працює, скрипт піде на друге, третє і т.д.
-const RSS_SERVICES = [
+// Список дзеркал (Технічна частина схована всередині)
+const RAW_MIRRORS = [
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
-    `https://hub.mosil.biz/telegram/channel/${CHANNEL_USERNAME}` // Додав ще одне резервне
+    `https://hub.mosil.biz/telegram/channel/${CHANNEL_USERNAME}`
 ];
+
+// Перемішуємо дзеркала для надійності
+const RSS_SERVICES = RAW_MIRRORS.sort(() => Math.random() - 0.5);
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (Auto Update)
+// 🚀 ЗАВАНТАЖЕННЯ
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
+    // Показуємо "Завантаження..." ТІЛЬКИ при першому старті
+    // При авто-оновленні користувач нічого не помітить, просто зміняться новини
     if (!isBackground) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    // Унікальний ключ часу (обхід кешу)
-    const cacheBuster = Date.now();
+    const cacheBuster = Date.now(); 
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        // 🔥 ПРИБРАВ ЛІМІТОВАНИЙ API KEY, залишив чистий запит 🔥
+        // Ми більше не виводимо на екран "Перевірка джерела..."
+        // Це відбувається мовчки
         const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&t=${cacheBuster}`;
 
         try {
@@ -50,52 +54,44 @@ async function loadNews(isBackground = false) {
                     if (parsedItem) createCard(parsedItem);
                 });
                 
-                if (!isBackground) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                }
-                // Якщо вдалось завантажити - виходимо з циклу і не мучимо інші сервери
-                return; 
+                if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
+                return; // Успіх
             }
         } catch (e) {
-            console.warn(`Дзеркало ${i} (${RSS_SERVICES[i]}) не відповіло.`);
+            // Тихо пропускаємо помилку в консоль, користувач цього не бачить
+            console.warn(`Дзеркало ${i} не відповіло.`);
         }
     }
 
-    // Якщо ми тут - значить всі дзеркала відмовили
+    // Помилку показуємо, тільки якщо зовсім нічого не завантажилось
     if (!isBackground) {
         container.innerHTML = `
             <div class="error">
-                <p>⚠️ Перевантаження серверів</p>
-                <small>Спробуйте перезайти через хвилину</small>
+                <p>Не вдалося оновити стрічку</p>
+                <small style="opacity:0.6">Перевірте інтернет</small>
             </div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// ==========================================
-// ⏰ ТАЙМЕР АВТО-ОНОВЛЕННЯ
-// ==========================================
-
+// Запуск (оновлення кожні 2 хвилини)
 loadNews(false);
-
-// Збільшив час до 120 секунд (2 хвилини), щоб не блокувало
-setInterval(() => {
-    loadNews(true); 
-}, 120000); 
+setInterval(() => { loadNews(true); }, 120000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР
+// 🧠 ПАРСЕР (ВСЕЇДНИЙ)
 // ==========================================
 
 function parseTelegramPost(item) {
     let imageSrc = null;
     let videoSrc = null;
+    
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = item.description;
 
     // 1. ВІДЕО
-    if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('video/')) {
+    if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('video')) {
         videoSrc = item.enclosure.link;
     }
     if (!videoSrc) {
@@ -103,39 +99,51 @@ function parseTelegramPost(item) {
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
 
-    // 2. КАРТИНКА
-    if (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
+    // 2. КАРТИНКА (Шукаємо скрізь)
+    if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('image')) {
         imageSrc = item.enclosure.link;
     }
     if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
-    if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
-    
-    // Якщо є відео, але немає картинки - заглушка
+    if (!imageSrc && item.thumbnail) {
+        imageSrc = item.thumbnail;
+    }
+    // Regex пошук (якщо HTML складний)
+    if (!imageSrc) {
+        const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
+        const match = item.description.match(imgRegex);
+        if (match) imageSrc = match[1];
+    }
+
+    // Заглушки
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
-    // Якщо взагалі нічого - заглушка
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксі тільки для реальних картинок (не для заглушок)
-    if (imageSrc && !imageSrc.includes('wsrv.nl') && !imageSrc.includes('placehold')) {
+    // Проксі
+    if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
     // 3. ТЕКСТ
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
-    if (!cleanText) cleanText = videoSrc ? "Відео новина" : "";
+    
+    if (!cleanText) {
+        if (videoSrc) cleanText = "Відео новина";
+        else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото новина";
+        else cleanText = "Новина";
+    }
 
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
-
+    
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
 
     const dateObj = new Date(item.pubDate);
-    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
+    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
         title: shortTitle, 
