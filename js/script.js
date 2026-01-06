@@ -2,7 +2,6 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.enableClosingConfirmation();
 
-// Встановлюємо темно-синій колір фону для Телеграм
 document.body.style.backgroundColor = '#0a0e17';
 
 // ==========================================
@@ -51,7 +50,7 @@ async function loadNews() {
 }
 
 // ==========================================
-// 🧠 ПАРСЕР
+// 🧠 ПАРСЕР (ОЧИЩЕННЯ ТЕКСТУ)
 // ==========================================
 
 function parseTelegramPost(item) {
@@ -81,29 +80,32 @@ function parseTelegramPost(item) {
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксі для картинок
     if (imageSrc && !imageSrc.includes('wsrv.nl') && !imageSrc.includes('placehold')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // 3. ТЕКСТ (Обрізка до 3-х слів)
+    // 3. ТЕКСТ (Чистка і Форматування)
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
-    if (!cleanText) cleanText = videoSrc ? "Дивитись відео" : "";
+    if (!cleanText) cleanText = videoSrc ? "Відео новина" : "";
 
-    // 🔥 ЛОГІКА СКОРОЧЕННЯ: 3 слова + три крапки
+    // 🔥 ОЧИЩЕННЯ ВІД ТЕГІВ ТИПУ [Video] або [Фото] 🔥
+    // Забираємо все, що в квадратних дужках на початку
+    cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
+
+    // 🔥 СТВОРЮЄМО КОРОТКИЙ ЗАГОЛОВОК (3-4 слова) 🔥
     let words = cleanText.split(/\s+/);
-    let shortText = words.slice(0, 3).join(' ');
-    if (words.length > 3) shortText += "...";
+    let shortTitle = words.slice(0, 4).join(' ');
+    if (words.length > 4) shortTitle += "...";
 
-    // Дата
     const dateObj = new Date(item.pubDate);
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' });
 
     return {
-        title: item.title && !item.title.startsWith('http') ? item.title : "Новина",
-        short: shortText, // Короткий текст
-        full: cleanText,  // Повний текст (для модалки)
+        // Заголовок тепер чистий і короткий
+        title: shortTitle, 
+        // Повний текст для модалки
+        full: cleanText,  
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
@@ -123,6 +125,8 @@ function createCard(newsItem) {
 
     const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
 
+    // 🔥 ПРИБРАВ ЗАЙВУ СТРОКУ <p class="card-desc"> 🔥
+    // Тепер тільки картинка, один заголовок і дата
     card.innerHTML = `
         <div class="card-media-wrapper">
             <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
@@ -130,7 +134,6 @@ function createCard(newsItem) {
         </div>
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
-            <p class="card-desc">${newsItem.short}</p>
             <div class="card-meta">${newsItem.date}</div>
         </div>
     `;
@@ -176,7 +179,10 @@ function openModal(newsItem) {
         mediaContainer.appendChild(img);
     }
 
-    document.getElementById('modal-title').innerText = newsItem.title;
+    // У модалці показуємо повний текст
+    // Але якщо заголовок і текст збігаються (короткий пост), то заголовок можна не писати
+    // Тут ми просто виводимо все як є
+    document.getElementById('modal-title').innerText = newsItem.title; 
     document.getElementById('modal-date').innerText = newsItem.date;
     document.getElementById('modal-text').innerText = newsItem.full;
     document.getElementById('modal-link').href = newsItem.link;
