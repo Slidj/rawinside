@@ -5,26 +5,22 @@ tg.enableClosingConfirmation();
 document.body.style.backgroundColor = '#0a0e17';
 
 // ==========================================
-// ⚙️ НАЛАШТУВАННЯ (ТВОЇ ПРАВИЛА)
+// ⚙️ НАЛАШТУВАННЯ
 // ==========================================
 
-// 👇 ВСТАВ СЮДИ СВІЙ КЛЮЧ ВІД NEWSDATA.IO 👇
-const API_KEY = 'pub_22e4e8780f9349e7a64a65f886ecae3a'; 
+const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Як часто оновлювати новини (у хвилинах)?
-// 10 хвилин = економно для ліміту 200 запитів/день
-const UPDATE_TIME_MINUTES = 10; 
-
-// Параметри пошуку:
-// country=ua (Україна)
-// language=uk (Українська мова)
-// category=top (Головні новини)
-const API_URL = `https://newsdata.io/api/1/news?apikey=${API_KEY}&country=ua&language=uk&category=top`;
+// Джерела, які віддають ПОВНИЙ текст (Full Text)
+const RSS_URLS = [
+    `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
+    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
+];
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (STABLE API)
+// 🚀 ЗАВАНТАЖЕННЯ (DIRECT XML via CODETABS)
 // ==========================================
 
 async function loadNews(isBackground = false) {
@@ -34,112 +30,163 @@ async function loadNews(isBackground = false) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
 
-    try {
-        const response = await fetch(API_URL);
-        
-        // Перевірка на помилку ліміту (429) або ключа (401)
-        if (response.status === 429) {
-            throw new Error('Ліміт запитів вичерпано (200/день)');
-        }
-        if (response.status === 401) {
-            throw new Error('Невірний API Key');
-        }
+    // Анти-кеш: змінюємо цифру раз на 5 хвилин.
+    // Це дозволяє бачити нові новини, але не "злить" сервер частими запитами.
+    const safeTimestamp = Math.floor(Date.now() / 300000); 
 
-        const data = await response.json();
+    let success = false;
 
-        if (data.status === 'success' && data.results.length > 0) {
-            container.innerHTML = ''; 
+    for (let i = 0; i < RSS_URLS.length; i++) {
+        if (success) break;
+
+        // CodeTabs - це дуже надійний проксі, який рідко блокує
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(RSS_URLS[i])}&dummy=${safeTimestamp}`;
+
+        try {
+            const response = await fetch(proxyUrl);
+            const strXML = await response.text();
             
-            // NewsData віддає масив у полі 'results'
-            data.results.forEach(item => {
-                // Відфільтруємо новини без картинок, щоб було красиво (за бажанням)
-                // if (!item.image_url) return; 
+            // Перевіряємо, чи це XML
+            if (!strXML.includes('<?xml') && !strXML.includes('<rss')) {
+                throw new Error('Not XML');
+            }
 
-                const parsedItem = parseNewsDataPost(item);
-                createCard(parsedItem);
-            });
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(strXML, "text/xml");
             
-            if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
-        } else {
-            throw new Error('Новин не знайдено');
-        }
+            const items = xmlDoc.querySelectorAll("item");
 
-    } catch (e) {
-        console.error(e);
-        if (!isBackground) {
-            container.innerHTML = `
-                <div class="error">
-                    <p>Помилка: ${e.message}</p>
-                    <small style="opacity:0.5">Перевірте ключ або ліміти</small>
-                </div>`;
-            tg.HapticFeedback.notificationOccurred('error');
+            if (items.length > 0) {
+                container.innerHTML = ''; 
+                items.forEach(item => {
+                    try {
+                        const parsedItem = parseXMLPost(item);
+                        if (parsedItem) createCard(parsedItem);
+                    } catch (e) { console.error(e); }
+                });
+                
+                if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
+                success = true;
+                return; 
+            }
+        } catch (e) {
+            console.warn(`Дзеркало ${i} пропущено.`);
         }
+    }
+
+    if (!success && !isBackground) {
+        container.innerHTML = `
+            <div class="error">
+                <p>Не вдалося завантажити новини</p>
+                <small style="opacity:0.5">Всі канали перевантажені</small>
+            </div>`;
+        tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// Запуск при старті
+// Запуск
 loadNews(false);
-
-// Автоматичний таймер (твоя частота)
-setInterval(() => { 
-    console.log("Авто-оновлення...");
-    loadNews(true); 
-}, UPDATE_TIME_MINUTES * 60 * 1000); 
+// Авто-оновлення раз на 5 хвилин (щоб напевно не заблокували)
+setInterval(() => { loadNews(true); }, 300000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР (NEWSDATA.IO FORMAT)
+// 🧠 ПАРСЕР XML (ПОВНИЙ ТЕКСТ)
 // ==========================================
 
-function parseNewsDataPost(item) {
-    // 1. Картинка
-    // Якщо image_url немає, ставимо заглушку
-    let imageSrc = item.image_url || DEFAULT_IMAGE;
+function parseXMLPost(xmlItem) {
+    // Функція для витягування тексту з тегу
+    const getTag = (name) => {
+        const el = xmlItem.querySelector(name);
+        return el ? (el.textContent || el.innerHTML) : "";
+    };
 
-    // Проксіювання картинки (щоб вантажилась швидко і мала правильний розмір)
-    if (imageSrc !== DEFAULT_IMAGE) {
-        // NewsData іноді дає http посилання, які Телеграм не любить. Wsrv це фіксить.
+    let title = getTag("title");
+    let link = getTag("link");
+    let pubDate = getTag("pubDate");
+    
+    // 🔥 ГОЛОВНЕ: Отримуємо повний опис 🔥
+    // У Telegram RSS весь текст лежить у <description>
+    let rawDescription = getTag("description");
+    
+    // Очищаємо HTML, щоб дістати чистий текст для перевірок, 
+    // але зберігаємо оригінал для модалки (щоб були абзаци)
+    let tempDiv = document.createElement("div");
+    tempDiv.innerHTML = rawDescription;
+
+    let imageSrc = null;
+    let videoSrc = null;
+
+    // --- 1. ПОШУК МЕДІА (ENCLOSURE) ---
+    const enclosures = xmlItem.querySelectorAll("enclosure");
+    enclosures.forEach(enc => {
+        const type = enc.getAttribute("type");
+        const url = enc.getAttribute("url");
+        if (type && type.includes("video") && !videoSrc) videoSrc = url;
+        if (type && type.includes("image") && !imageSrc) imageSrc = url;
+    });
+
+    // --- 2. ПОШУК МЕДІА (HTML) ---
+    if (!videoSrc) {
+        let videoTag = tempDiv.querySelector('video');
+        if (videoTag && videoTag.src) videoSrc = videoTag.src;
+    }
+    if (!imageSrc) {
+        let imgTag = tempDiv.querySelector('img');
+        if (imgTag) imageSrc = imgTag.src;
+    }
+    
+    // Regex для картинок в тексті
+    if (!imageSrc) {
+        const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
+        const match = rawDescription.match(imgRegex);
+        if (match) imageSrc = match[1];
+    }
+
+    // Заглушки
+    if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
+    if (!imageSrc) imageSrc = DEFAULT_IMAGE;
+
+    // Проксі зображень
+    if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // 2. Відео
-    // NewsData рідко дає прямі посилання на відео, здебільшого video_url це посилання на YouTube
-    let videoSrc = item.video_url || null;
+    // --- 3. ОБРОБКА ТЕКСТУ ---
+    
+    // Для повного тексту беремо те, що в tempDiv (там текст без HTML тегів <video>, але з форматуванням)
+    // Але нам треба прибрати зайві переноси рядків на початку
+    let fullText = tempDiv.innerText.trim();
+    
+    // Якщо тексту немає, ставимо заглушку
+    if (!fullText || fullText.length < 2) {
+        if (videoSrc) fullText = "Дивіться відео у повному вікні.";
+        else fullText = "Новина без текстового опису.";
+    }
 
-    // 3. Текст і заголовок
-    let title = item.title || "Без заголовку";
-    
-    // Опис: description (короткий) або content (довгий)
-    // Для модалки беремо content, якщо є, інакше description
-    let fullText = item.content || item.description || "Опис відсутній";
-    
-    // Для картки (короткий опис) - беремо заголовок
-    // NewsData дає хороші заголовки, їх не треба різати
+    // Прибираємо [Video], [Image] на початку
+    fullText = fullText.replace(/^\[[^\]]+\]\s*/, '');
+
+    // Формуємо короткий заголовок (4 слова) для картки
+    // Але якщо оригінальний заголовок (title) не "Новина" і не посилання, беремо його
     let shortTitle = title;
-    
-    // Якщо заголовок надто довгий (> 60 символів), обріжемо для краси
-    if (shortTitle.length > 60) {
-        shortTitle = shortTitle.substring(0, 60) + "...";
+    if (!shortTitle || shortTitle.includes('http') || shortTitle.length < 3) {
+        let words = fullText.split(/\s+/);
+        shortTitle = words.slice(0, 4).join(' ');
+        if (words.length > 4) shortTitle += "...";
     }
 
-    // 4. Дата
-    let dateStr = "";
-    if (item.pubDate) {
-        const dateObj = new Date(item.pubDate);
-        dateStr = dateObj.toLocaleDateString('uk-UA', { 
-            day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
-        });
-    }
+    // Дата
+    const dateObj = new Date(pubDate);
+    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
-        title: shortTitle,   // Заголовок для картки
-        fullTitle: title,    // Повний заголовок для модалки
-        full: fullText,      // Текст для модалки
+        title: shortTitle, 
+        full: fullText,  // Тут тепер повний текст
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
-        link: item.link,     // Посилання на оригінал
-        source: item.source_id // Назва джерела (напр. pravda)
+        link: link
     };
 }
 
@@ -162,40 +209,44 @@ function createCard(newsItem) {
         </div>
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
-            <div class="card-meta">
-                ${newsItem.source} • ${newsItem.date}
-            </div>
+            <div class="card-meta">${newsItem.date}</div>
         </div>
     `;
     container.appendChild(card);
 }
 
 // ==========================================
-// 🎬 ПЛЕЄР ТА МОДАЛКА
+// 🎬 ПЛЕЄР
 // ==========================================
 
 function openModal(newsItem) {
     const mediaContainer = document.getElementById('media-container');
     mediaContainer.innerHTML = ''; 
 
-    // Логіка відображення медіа
     if (newsItem.video) {
-        // Якщо це YouTube (NewsData часто дає YouTube)
-        if (newsItem.video.includes('youtube.com') || newsItem.video.includes('youtu.be')) {
-             // Спрощена логіка для YouTube - відкриваємо як посилання, бо iframe важко стилізувати в модалці
-             const img = document.createElement('img');
-             img.className = 'app-image';
-             img.src = newsItem.image;
-             mediaContainer.appendChild(img);
-        } else {
-            // Звичайне відео mp4
-            const video = document.createElement('video');
-            video.className = 'app-video';
-            video.src = newsItem.video;
-            video.controls = true;
-            video.autoplay = true;
-            mediaContainer.appendChild(video);
-        }
+        const video = document.createElement('video');
+        video.className = 'app-video';
+        video.src = newsItem.video;
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true; 
+        video.loop = true;
+        video.controls = true; 
+        
+        video.onerror = () => {
+            mediaContainer.innerHTML = ''; 
+            const fallbackImg = document.createElement('img');
+            fallbackImg.className = 'app-image';
+            fallbackImg.src = newsItem.image;
+            mediaContainer.appendChild(fallbackImg);
+            const msg = document.createElement('p');
+            msg.style.color = '#aaa';
+            msg.style.textAlign = 'center';
+            msg.style.marginTop = '10px';
+            msg.innerText = '(Відео доступне в каналі)';
+            mediaContainer.appendChild(msg);
+        };
+        mediaContainer.appendChild(video);
     } else {
         const img = document.createElement('img');
         img.className = 'app-image';
@@ -203,15 +254,13 @@ function openModal(newsItem) {
         mediaContainer.appendChild(img);
     }
 
-    document.getElementById('modal-title').innerText = newsItem.fullTitle; 
+    document.getElementById('modal-title').innerText = newsItem.title; 
     document.getElementById('modal-date').innerText = newsItem.date;
     
-    // NewsData іноді дає текст з HTML тегами, тому краще використовувати innerHTML
-    // Але треба бути обережним. Для простоти поки innerText
+    // Використовуємо innerText для безпеки, але зберігаємо переноси рядків
     document.getElementById('modal-text').innerText = newsItem.full;
     
     document.getElementById('modal-link').href = newsItem.link;
-    document.getElementById('modal-link').innerText = `Читати на ${newsItem.source} ↗`;
 
     document.getElementById('news-modal').classList.add('active');
     tg.BackButton.show();
