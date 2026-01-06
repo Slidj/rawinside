@@ -10,47 +10,57 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Найстабільніші мости для Telegram
-// Ми використовуємо їх по черзі, якщо перший не відповідає
-const RSS_BRIDGES = [
-    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
+// Прямі посилання на RSS (без rss2json)
+const RSS_URLS = [
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
-    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`
+    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
 ];
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ (SIMPLE FETCH)
+// 🚀 ЗАВАНТАЖЕННЯ (DIRECT XML)
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
     if (!isBackground) {
-        container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
+        container.innerHTML = '<div class="loading">Завантаження...</div>';
     }
 
-    // Легкий анти-кеш тільки для браузера (не для сервера)
-    const timeStamp = Math.floor(Date.now() / 60000); // Змінюється раз на хвилину
+    // Унікальне число (мілісекунди), щоб проксі не віддавав старе
+    const cacheBuster = Date.now();
 
-    for (let i = 0; i < RSS_BRIDGES.length; i++) {
-        // Використовуємо стандартний rss2json БЕЗ ключів (щоб не було лімітів)
-        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_BRIDGES[i])}&_=${timeStamp}`;
+    for (let i = 0; i < RSS_URLS.length; i++) {
+        // Використовуємо AllOrigins RAW - він просто передає файл як є, не намагаючись його обробляти чи кешувати надовго
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(RSS_URLS[i])}&rand=${cacheBuster}`;
 
         try {
-            const response = await fetch(apiUrl);
-            const data = await response.json();
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const strXML = await response.text();
+            
+            // Парсимо XML прямо в браузері
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(strXML, "text/xml");
+            
+            // Перевіряємо, чи є помилки парсингу
+            if (xmlDoc.querySelector("parsererror")) throw new Error('XML Parse Error');
 
-            if (data.status === 'ok' && data.items.length > 0) {
+            const items = xmlDoc.querySelectorAll("item");
+
+            if (items.length > 0) {
                 container.innerHTML = ''; 
                 
-                data.items.forEach(item => {
+                items.forEach(item => {
                     try {
-                        const parsedItem = parseTelegramPost(item);
+                        const parsedItem = parseXMLPost(item);
                         if (parsedItem) createCard(parsedItem);
                     } catch (err) {
-                        console.error("Помилка поста:", err);
+                        console.error("Помилка обробки поста:", err);
                     }
                 });
                 
@@ -58,74 +68,82 @@ async function loadNews(isBackground = false) {
                 return; // Успіх!
             }
         } catch (e) {
-            console.warn(`Міст ${i} не відповідає, пробуємо наступний...`);
+            console.warn(`Дзеркало ${i} пропущено:`, e.message);
         }
     }
 
     if (!isBackground) {
         container.innerHTML = `
             <div class="error">
-                <p>Немає з'єднання</p>
-                <small style="opacity:0.5">Спробуйте пізніше</small>
+                <p>Оновлення...</p>
+                <small style="opacity:0.5">Всі сервери зайняті</small>
             </div>`;
-        tg.HapticFeedback.notificationOccurred('error');
+        // Не вібруємо помилкою, щоб не дратувати, просто чекаємо наступного таймера
     }
 }
 
-// Оновлюємо кожні 2 хвилини
+// Запуск (оновлення кожні 60 секунд)
 loadNews(false);
-setInterval(() => { loadNews(true); }, 120000); 
+setInterval(() => { loadNews(true); }, 60000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР (Виправлено альбоми)
+// 🧠 ПАРСЕР XML (ПОТУЖНИЙ)
 // ==========================================
 
-function parseTelegramPost(item) {
+function parseXMLPost(xmlItem) {
+    // Допоміжна функція для безпечного отримання тексту тегу
+    const getTag = (name) => {
+        const el = xmlItem.querySelector(name);
+        return el ? (el.textContent || el.innerHTML) : "";
+    };
+
+    let title = getTag("title");
+    let link = getTag("link");
+    let pubDate = getTag("pubDate");
+    let description = getTag("description");
+
     let imageSrc = null;
     let videoSrc = null;
-    
-    // Створюємо HTML-аналізатор
+
+    // Створюємо тимчасовий елемент
     let tempDiv = document.createElement("div");
-    tempDiv.innerHTML = item.description || "";
+    tempDiv.innerHTML = description;
 
-    // --- ОБРОБКА ВЛОЖЕНЬ (ENCLOSURE) ---
-    // Це критично важливо для альбомів
-    let enclosure = item.enclosure;
+    // --- ПОШУК МЕДІА (XML Enclosure) ---
+    const enclosures = xmlItem.querySelectorAll("enclosure");
     
-    // 1. Якщо це масив (альбом)
-    if (Array.isArray(enclosure) && enclosure.length > 0) {
-        // Пріоритет: Відео -> Картинка
-        let vid = enclosure.find(e => e.type && e.type.includes('video'));
-        let img = enclosure.find(e => e.type && e.type.includes('image'));
-        enclosure = vid || img || enclosure[0];
-    }
+    // Перебираємо всі вкладення (для альбомів)
+    enclosures.forEach(enc => {
+        const type = enc.getAttribute("type");
+        const url = enc.getAttribute("url");
+        
+        if (type && type.includes("video") && !videoSrc) videoSrc = url;
+        if (type && type.includes("image") && !imageSrc) imageSrc = url;
+    });
 
-    // 2. Якщо це один об'єкт
-    if (enclosure && enclosure.type) {
-        if (enclosure.type.includes('video')) videoSrc = enclosure.link;
-        if (enclosure.type.includes('image')) imageSrc = enclosure.link;
-    }
-
-    // --- ПОШУК У HTML (ЯКЩО ENCLOSURE ПУСТИЙ) ---
+    // --- ПОШУК В HTML (Якщо в XML пусто) ---
     if (!videoSrc) {
         let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
-
     if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
 
-    // Запасний варіант для картинок (Thumbnail)
-    if (!imageSrc && item.thumbnail) imageSrc = item.thumbnail;
+    // Regex
+    if (!imageSrc) {
+        const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
+        const match = description.match(imgRegex);
+        if (match) imageSrc = match[1];
+    }
 
     // Заглушки
     if (videoSrc && !imageSrc) imageSrc = DEFAULT_IMAGE;
     if (!imageSrc) imageSrc = DEFAULT_IMAGE;
 
-    // Проксі для картинок
+    // Проксі зображень
     if (imageSrc !== DEFAULT_IMAGE && !imageSrc.includes('wsrv.nl')) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
@@ -134,23 +152,20 @@ function parseTelegramPost(item) {
     let cleanText = tempDiv.innerText || "";
     cleanText = cleanText.trim();
     
-    // Якщо тексту немає
     if (!cleanText) {
-        if (videoSrc) cleanText = "Відео";
-        else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото";
+        if (videoSrc) cleanText = "Відео новина";
+        else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото новина";
         else cleanText = "Новина";
     }
 
-    // Прибираємо [Video] та інші теги
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
     
-    // Короткий заголовок (4 слова)
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
 
     // Дата
-    const dateObj = new Date(item.pubDate);
+    const dateObj = new Date(pubDate);
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
@@ -159,7 +174,7 @@ function parseTelegramPost(item) {
         image: imageSrc,
         video: videoSrc, 
         date: dateStr,
-        link: item.link
+        link: link
     };
 }
 
