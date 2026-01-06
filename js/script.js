@@ -10,16 +10,12 @@ document.body.style.backgroundColor = '#0a0e17';
 
 const CHANNEL_USERNAME = 'rawinside_news'; 
 
-// Список дзеркал (Технічна частина схована всередині)
-const RAW_MIRRORS = [
-    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
-    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`,
+// Змінив порядок: openrss часто стабільніший для телеграм-каналів
+const RSS_SERVICES = [
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
-    `https://hub.mosil.biz/telegram/channel/${CHANNEL_USERNAME}`
+    `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
+    `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
 ];
-
-// Перемішуємо дзеркала для надійності
-const RSS_SERVICES = RAW_MIRRORS.sort(() => Math.random() - 0.5);
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
@@ -30,8 +26,6 @@ const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
-    // Показуємо "Завантаження..." ТІЛЬКИ при першому старті
-    // При авто-оновленні користувач нічого не помітить, просто зміняться новини
     if (!isBackground) {
         container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
     }
@@ -39,8 +33,6 @@ async function loadNews(isBackground = false) {
     const cacheBuster = Date.now(); 
 
     for (let i = 0; i < RSS_SERVICES.length; i++) {
-        // Ми більше не виводимо на екран "Перевірка джерела..."
-        // Це відбувається мовчки
         const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_SERVICES[i])}&t=${cacheBuster}`;
 
         try {
@@ -49,59 +41,71 @@ async function loadNews(isBackground = false) {
 
             if (data.status === 'ok' && data.items.length > 0) {
                 container.innerHTML = ''; 
+                
+                // Проходимо по кожному елементу безпечно
                 data.items.forEach(item => {
-                    const parsedItem = parseTelegramPost(item);
-                    if (parsedItem) createCard(parsedItem);
+                    try {
+                        const parsedItem = parseTelegramPost(item);
+                        if (parsedItem) createCard(parsedItem);
+                    } catch (err) {
+                        console.error("Пропуск битого поста:", err);
+                    }
                 });
                 
                 if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
-                return; // Успіх
+                return; 
             }
         } catch (e) {
-            // Тихо пропускаємо помилку в консоль, користувач цього не бачить
             console.warn(`Дзеркало ${i} не відповіло.`);
         }
     }
 
-    // Помилку показуємо, тільки якщо зовсім нічого не завантажилось
     if (!isBackground) {
         container.innerHTML = `
             <div class="error">
                 <p>Не вдалося оновити стрічку</p>
-                <small style="opacity:0.6">Перевірте інтернет</small>
             </div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// Запуск (оновлення кожні 2 хвилини)
+// Запуск
 loadNews(false);
 setInterval(() => { loadNews(true); }, 120000); 
 
 
 // ==========================================
-// 🧠 ПАРСЕР (ВСЕЇДНИЙ)
+// 🧠 ПАРСЕР (ВИПРАВЛЕНО РОБОТУ З АЛЬБОМАМИ)
 // ==========================================
 
 function parseTelegramPost(item) {
     let imageSrc = null;
     let videoSrc = null;
     
+    // Створюємо віртуальний елемент для читання HTML
     let tempDiv = document.createElement("div");
-    tempDiv.innerHTML = item.description;
+    tempDiv.innerHTML = item.description || ""; // Захист від пустих описів
+
+    // 🔥 ГОЛОВНЕ ВИПРАВЛЕННЯ: Обробка масивів (альбомів) 🔥
+    let enclosure = item.enclosure;
+    
+    // Якщо enclosure - це масив (багато файлів), беремо перший
+    if (Array.isArray(enclosure)) {
+        enclosure = enclosure[0];
+    }
 
     // 1. ВІДЕО
-    if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('video')) {
-        videoSrc = item.enclosure.link;
+    if (enclosure && enclosure.type && enclosure.type.includes('video')) {
+        videoSrc = enclosure.link;
     }
     if (!videoSrc) {
         let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
 
-    // 2. КАРТИНКА (Шукаємо скрізь)
-    if (item.enclosure && item.enclosure.type && item.enclosure.type.includes('image')) {
-        imageSrc = item.enclosure.link;
+    // 2. КАРТИНКА
+    if (enclosure && enclosure.type && enclosure.type.includes('image')) {
+        imageSrc = enclosure.link;
     }
     if (!imageSrc) {
         let imgTag = tempDiv.querySelector('img');
@@ -110,8 +114,9 @@ function parseTelegramPost(item) {
     if (!imageSrc && item.thumbnail) {
         imageSrc = item.thumbnail;
     }
-    // Regex пошук (якщо HTML складний)
-    if (!imageSrc) {
+    
+    // Якщо нічого не знайшли - пробуємо витягнути посилання текстом
+    if (!imageSrc && item.description) {
         const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
         const match = item.description.match(imgRegex);
         if (match) imageSrc = match[1];
@@ -138,6 +143,7 @@ function parseTelegramPost(item) {
 
     cleanText = cleanText.replace(/^\[[^\]]+\]\s*/, '');
     
+    // Короткий заголовок
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
