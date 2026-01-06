@@ -9,7 +9,7 @@ document.body.style.backgroundColor = '#000000';
 // ==========================================
 
 // Спробуй 'tsnug' для тесту відео, або свій публічний канал
-const CHANNEL_USERNAME = 'ssternenko'; 
+const CHANNEL_USERNAME = 'rawinside_news'; 
 
 // Ці сервіси вміють діставати відео-посилання з Телеграму
 const RSS_SERVICES = [
