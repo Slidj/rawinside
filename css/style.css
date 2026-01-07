@@ -2,10 +2,8 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* --- ОСНОВНИЙ ФОН --- */
 body {
     margin: 0; padding: 0;
-    /* Темно-синій матовий градієнт */
     background: linear-gradient(135deg, #0a0e17 0%, #141e30 100%);
     color: #ffffff;
     font-family: 'Inter', sans-serif;
@@ -19,10 +17,7 @@ body {
     position: fixed; 
     top: 0; left: 0; width: 100%;
     height: 140px; 
-    
-    /* Центруємо логотип */
     display: flex; align-items: flex-end; justify-content: center;
-    
     padding: 15px 20px 20px 20px; 
     background: rgba(10, 14, 23, 0.85); 
     backdrop-filter: blur(20px);
@@ -32,90 +27,69 @@ body {
 }
 
 .header h1 { 
-    margin: 0; 
-    font-size: 2rem; 
-    font-weight: 900; 
-    letter-spacing: 2px; 
-    font-style: italic; 
+    margin: 0; font-size: 2rem; font-weight: 900; letter-spacing: 2px; font-style: italic; 
     background: linear-gradient(to right, #ffffff, #a5b4fc); 
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     text-transform: uppercase;
 }
 
-/* --- 🔥 АНІМАЦІЯ ЗАВАНТАЖЕННЯ (СПІНЕР) 🔥 --- */
+/* --- СПІНЕР --- */
 .loader-container {
-    display: flex; 
-    justify-content: center; 
-    align-items: center;
-    padding: 50px;
+    display: flex; justify-content: center; align-items: center; padding: 50px;
 }
-
 .loader {
-    width: 48px;
-    height: 48px;
-    border: 5px solid rgba(255, 255, 255, 0.1); /* Прозорий обідок */
-    border-bottom-color: #a5b4fc; /* Колір "язичка", що крутиться */
+    width: 48px; height: 48px;
+    border: 5px solid rgba(255, 255, 255, 0.1);
+    border-bottom-color: #a5b4fc;
     border-radius: 50%;
     display: inline-block;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
 }
-
 @keyframes rotation {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 
-/* --- ПОВІДОМЛЕННЯ ПРО ПОМИЛКУ --- */
-.error {
-    padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem;
-}
+.error { padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem; }
 
 /* --- СТРІЧКА НОВИН --- */
-.news-container {
-    padding: 20px;
-    display: flex; flex-direction: column; gap: 20px;
+.news-container { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+/* 🔥 АНІМАЦІЯ ПОЯВИ 🔥 */
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
-/* --- КАРТКА --- */
 .news-card {
     background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: transform 0.2s;
+    border-radius: 20px; overflow: hidden; cursor: pointer;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    
+    /* 🔥 Початковий стан: приховано 🔥 */
+    opacity: 0; 
+    animation: fadeUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-.news-card:active {
-    transform: scale(0.98);
-    background: rgba(255, 255, 255, 0.08);
-}
+.news-card:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.08); }
 
-.card-media-wrapper {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
-    background: rgba(0,0,0,0.3);
-}
-
-.card-media {
-    width: 100%; height: 100%;
-    object-fit: cover; display: block;
-}
+.card-media-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: rgba(0,0,0,0.3); }
+.card-media { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .play-icon-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 50px; height: 50px;
-    background: rgba(10, 14, 23, 0.6);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(5px);
-    border: 2px solid rgba(255,255,255,0.8);
+    width: 50px; height: 50px; background: rgba(10, 14, 23, 0.6);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(5px); border: 2px solid rgba(255,255,255,0.8);
 }
 .play-icon-overlay::after { content: '▶'; font-size: 20px; color: white; margin-left: 4px; }
 
@@ -127,18 +101,14 @@ body {
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     z-index: 100;
-    
-    /* Темний непрозорий фон, щоб приховати глюки анімації стрічки */
     background: rgba(5, 8, 15, 0.96);
-    
     opacity: 0; pointer-events: none;
     transition: opacity 0.4s ease;
 }
 .modal-wrapper.active { opacity: 1; pointer-events: auto; }
 
 .modal-sheet {
-    position: absolute; bottom: 0; left: 0; width: 100%;
-    height: 95%;
+    position: absolute; bottom: 0; left: 0; width: 100%; height: 95%;
     background: #0e1522;
     border-top-left-radius: 24px; border-top-right-radius: 24px;
     transform: translateY(100%);
@@ -150,18 +120,13 @@ body {
 }
 .modal-wrapper.active .modal-sheet { transform: translateY(0); }
 
-/* 🔥 ХРЕСТИК ОПУЩЕНО ТА ЗБІЛЬШЕНО 🔥 */
 .close-btn {
-    position: absolute; 
-    top: 30px;  /* Відступ зверху */
-    right: 20px; /* Відступ справа */
-    width: 44px; height: 44px; /* Розмір кнопки */
+    position: absolute; top: 30px; right: 20px;
+    width: 44px; height: 44px;
     background: rgba(0, 0, 0, 0.6); 
     border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 50%;
-    color: #fff; font-size: 1.2rem; z-index: 50; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(10px);
+    border-radius: 50%; color: #fff; font-size: 1.2rem; z-index: 50; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);
 }
 
 .modal-content { overflow-y: auto; display: flex; flex-direction: column; height: 100%; }
@@ -171,7 +136,6 @@ body {
     display: flex; justify-content: center; align-items: center;
     flex-shrink: 0; min-height: 250px;
 }
-
 .app-video { width: 100%; max-height: 70vh; display: block; background: #000; }
 .app-image { width: 100%; max-height: 60vh; object-fit: contain; }
 
