@@ -27,7 +27,8 @@ async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
     if (!isBackground) {
-        container.innerHTML = '<div class="loading">Завантаження стрічки...</div>';
+        // 🔥 ТУТ ЗМІНЕНО: Вставляємо спінер замість тексту
+        container.innerHTML = '<div class="loader-container"><span class="loader"></span></div>';
     }
 
     const safeTimestamp = Math.floor(Date.now() / 300000); // 5 хвилин кеш
