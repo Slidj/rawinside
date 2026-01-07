@@ -14,18 +14,17 @@ const RSS_URLS = [
 ];
 
 // 🔥 ГЛОБАЛЬНІ ЗМІННІ ДЛЯ СКРОЛУ 🔥
-let ALL_NEWS = [];        // Тут зберігаємо всі завантажені новини
-let CURRENT_INDEX = 0;    // Скільки зараз показано
-const BATCH_SIZE = 10;    // По скільки додавати за раз
+let ALL_NEWS = [];        
+let CURRENT_INDEX = 0;    
+const BATCH_SIZE = 10;    
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ ДАНИХ (Тільки завантаження в пам'ять)
+// 🚀 ЗАВАНТАЖЕННЯ ДАНИХ
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
-    // Якщо це перше завантаження, показуємо спінер
     if (!isBackground) {
         ALL_NEWS = [];
         CURRENT_INDEX = 0;
@@ -51,7 +50,6 @@ async function loadNews(isBackground = false) {
             const items = xmlDoc.querySelectorAll("item");
 
             if (items.length > 0) {
-                // 🔥 ВАЖЛИВО: Ми не малюємо одразу, а зберігаємо в масив
                 const tempArray = [];
                 items.forEach(item => {
                     try {
@@ -60,13 +58,9 @@ async function loadNews(isBackground = false) {
                     } catch (e) { console.error(e); }
                 });
 
-                // Зберігаємо в глобальну змінну
                 ALL_NEWS = tempArray;
                 
-                // Очищаємо контейнер від спінера
                 if (!isBackground) container.innerHTML = '';
-                
-                // 🔥 Малюємо ПЕРШУ порцію (10 штук)
                 renderNextBatch();
                 
                 if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
@@ -84,42 +78,34 @@ async function loadNews(isBackground = false) {
 }
 
 // ==========================================
-// 📦 ЛОГІКА ПОРЦІЙ (INFINITE SCROLL)
+// 📦 ЛОГІКА ПОРЦІЙ
 // ==========================================
 
 function renderNextBatch() {
     const container = document.getElementById('news-feed');
-    
-    // Якщо вже все показали - виходимо
     if (CURRENT_INDEX >= ALL_NEWS.length) return;
 
-    // Беремо наступні 10 штук
     const nextBatch = ALL_NEWS.slice(CURRENT_INDEX, CURRENT_INDEX + BATCH_SIZE);
     
     nextBatch.forEach((newsItem, index) => {
-        // Створюємо картку, передаємо index для затримки анімації
         createCard(newsItem, index);
     });
 
     CURRENT_INDEX += nextBatch.length;
 }
 
-// 🔥 СПОСТЕРІГАЧ ЗА СКРОЛОМ 🔥
-// Ця штука дивиться, коли на екрані з'явиться елемент #scroll-guard
 const observer = new IntersectionObserver((entries) => {
     if (entries[0].isIntersecting) {
-        // Коли догортали до низу - додаємо ще новин
         renderNextBatch();
     }
-}, { rootMargin: '100px' }); // Починаємо вантажити трохи раніше, ніж дійдемо до самого низу
+}, { rootMargin: '100px' });
 
-// Підключаємо спостерігач
 const scrollGuard = document.getElementById('scroll-guard');
 if (scrollGuard) observer.observe(scrollGuard);
 
 
 // ==========================================
-// 🧠 ПАРСЕР XML (Той самий)
+// 🧠 ПАРСЕР XML
 // ==========================================
 
 function parseXMLPost(xmlItem) {
@@ -196,22 +182,19 @@ function parseXMLPost(xmlItem) {
 }
 
 // ==========================================
-// 🎨 КАРТКА (З ЗАТРИМКОЮ АНІМАЦІЇ)
+// 🎨 КАРТКА (З БЕЙДЖЕМ)
 // ==========================================
 
 function createCard(newsItem, index) {
     const container = document.getElementById('news-feed');
     const card = document.createElement('div');
     card.className = 'news-card';
-    
-    // 🔥 ДОДАЄМО ЗАТРИМКУ АНІМАЦІЇ 🔥
-    // Кожна наступна картка з'явиться на 0.1с пізніше попередньої
     card.style.animationDelay = `${index * 0.1}s`;
-
     card.onclick = () => openModal(newsItem);
 
     const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
 
+    // 🔥 ДОДАНО БЕЙДЖ "NEWS INSIDE" 🔥
     card.innerHTML = `
         <div class="card-media-wrapper">
             <img src="${newsItem.image}" class="card-media" loading="lazy" onerror="this.src='${DEFAULT_IMAGE}'">
@@ -220,6 +203,11 @@ function createCard(newsItem, index) {
         <div class="card-content">
             <div class="card-title">${newsItem.title}</div>
             <div class="card-meta">${newsItem.date}</div>
+        </div>
+        
+        <div class="card-badge">
+            <span class="b-news">NEWS</span>
+            <span class="b-inside">INSIDE</span>
         </div>
     `;
     container.appendChild(card);
@@ -266,6 +254,5 @@ function closeModal() {
     tg.BackButton.hide();
 }
 
-// Запуск
 loadNews(false);
 setInterval(() => { loadNews(true); }, 300000); 
