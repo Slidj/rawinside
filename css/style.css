@@ -54,50 +54,75 @@ body {
 .error { padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem; }
 
 /* --- СТРІЧКА НОВИН --- */
-.news-container { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-
-/* 🔥 АНІМАЦІЯ ПОЯВИ 🔥 */
-@keyframes fadeUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+.news-container {
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 20px;
 }
 
+/* Анімація появи */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- КАРТКА (Вертикальна, але компактна) --- */
 .news-card {
+    position: relative; /* Для позиціювання бейджа */
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px; overflow: hidden; cursor: pointer;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
     
-    /* 🔥 Початковий стан: приховано 🔥 */
     opacity: 0; 
     animation: fadeUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
-
 .news-card:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.08); }
 
-.card-media-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: rgba(0,0,0,0.3); }
+/* 🔥 КОМПАКТНА КАРТИНКА (21:9 - Кіношний формат) 🔥 */
+.card-media-wrapper { 
+    position: relative; 
+    width: 100%; 
+    aspect-ratio: 2.35/1; /* Робимо вузьку смужку замість великого квадрата */
+    background: rgba(0,0,0,0.3); 
+}
 .card-media { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .play-icon-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 50px; height: 50px; background: rgba(10, 14, 23, 0.6);
+    width: 44px; height: 44px; background: rgba(10, 14, 23, 0.6);
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(5px); border: 2px solid rgba(255,255,255,0.8);
 }
-.play-icon-overlay::after { content: '▶'; font-size: 20px; color: white; margin-left: 4px; }
+.play-icon-overlay::after { content: '▶'; font-size: 18px; color: white; margin-left: 4px; }
 
-.card-content { padding: 15px; }
-.card-title { margin: 0 0 8px 0; font-size: 1.2rem; font-weight: 700; line-height: 1.3; }
+/* Контент */
+.card-content { padding: 15px; padding-bottom: 35px; /* Місце для бейджа знизу */ }
+.card-title { margin: 0 0 8px 0; font-size: 1.15rem; font-weight: 700; line-height: 1.3; }
 .card-meta { margin-top: 5px; font-size: 0.8rem; color: rgba(255,255,255,0.5); text-transform: uppercase; }
 
-/* --- МОДАЛЬНЕ ВІКНО --- */
+/* --- 🔥 БЕЙДЖ "NEWS INSIDE" 🔥 --- */
+.card-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 15px;
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 5;
+    /* Легка підкладка, щоб читалось на будь-якому фоні */
+    /* background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 6px; backdrop-filter: blur(4px); */
+}
+
+.b-news { color: #3b82f6; /* Яскравий синій */ margin-right: 4px; }
+.b-inside { 
+    background: linear-gradient(to right, #ffffff, #a5b4fc);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+
+/* --- МОДАЛКА --- */
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     z-index: 100;
