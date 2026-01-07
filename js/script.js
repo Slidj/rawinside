@@ -4,41 +4,40 @@ tg.enableClosingConfirmation();
 
 document.body.style.backgroundColor = '#0a0e17';
 
-// ==========================================
-// ⚙️ НАЛАШТУВАННЯ
-// ==========================================
-
 const CHANNEL_USERNAME = 'rawinside_news'; 
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
 
-// Використовуємо надійні дзеркала
 const RSS_URLS = [
     `https://openrss.org/t.me/${CHANNEL_USERNAME}`,
     `https://rsshub.app/telegram/channel/${CHANNEL_USERNAME}`,
     `https://tg.i-c-a.su/rss/${CHANNEL_USERNAME}`
 ];
 
-const DEFAULT_IMAGE = 'https://placehold.co/800x400/141e30/ffffff?text=INSIDE';
+// 🔥 ГЛОБАЛЬНІ ЗМІННІ ДЛЯ СКРОЛУ 🔥
+let ALL_NEWS = [];        // Тут зберігаємо всі завантажені новини
+let CURRENT_INDEX = 0;    // Скільки зараз показано
+const BATCH_SIZE = 10;    // По скільки додавати за раз
 
 // ==========================================
-// 🚀 ЗАВАНТАЖЕННЯ
+// 🚀 ЗАВАНТАЖЕННЯ ДАНИХ (Тільки завантаження в пам'ять)
 // ==========================================
 
 async function loadNews(isBackground = false) {
     const container = document.getElementById('news-feed');
     
+    // Якщо це перше завантаження, показуємо спінер
     if (!isBackground) {
-        // 🔥 ТУТ ЗМІНЕНО: Вставляємо спінер замість тексту
+        ALL_NEWS = [];
+        CURRENT_INDEX = 0;
         container.innerHTML = '<div class="loader-container"><span class="loader"></span></div>';
     }
 
-    const safeTimestamp = Math.floor(Date.now() / 300000); // 5 хвилин кеш
-
+    const safeTimestamp = Math.floor(Date.now() / 300000); 
     let success = false;
 
     for (let i = 0; i < RSS_URLS.length; i++) {
         if (success) break;
 
-        // CodeTabs проксі
         const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(RSS_URLS[i])}&dummy=${safeTimestamp}`;
 
         try {
@@ -52,17 +51,26 @@ async function loadNews(isBackground = false) {
             const items = xmlDoc.querySelectorAll("item");
 
             if (items.length > 0) {
-                container.innerHTML = ''; 
+                // 🔥 ВАЖЛИВО: Ми не малюємо одразу, а зберігаємо в масив
+                const tempArray = [];
                 items.forEach(item => {
                     try {
                         const parsedItem = parseXMLPost(item);
-                        if (parsedItem) createCard(parsedItem);
+                        if (parsedItem) tempArray.push(parsedItem);
                     } catch (e) { console.error(e); }
                 });
+
+                // Зберігаємо в глобальну змінну
+                ALL_NEWS = tempArray;
+                
+                // Очищаємо контейнер від спінера
+                if (!isBackground) container.innerHTML = '';
+                
+                // 🔥 Малюємо ПЕРШУ порцію (10 штук)
+                renderNextBatch();
                 
                 if (!isBackground) tg.HapticFeedback.notificationOccurred('success');
                 success = true;
-                return; 
             }
         } catch (e) {
             console.warn(`Дзеркало ${i} пропущено.`);
@@ -70,21 +78,48 @@ async function loadNews(isBackground = false) {
     }
 
     if (!success && !isBackground) {
-        container.innerHTML = `
-            <div class="error">
-                <p>Не вдалося завантажити новини</p>
-            </div>`;
+        container.innerHTML = `<div class="error"><p>Не вдалося завантажити новини</p></div>`;
         tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-// Запуск
-loadNews(false);
-setInterval(() => { loadNews(true); }, 300000); 
+// ==========================================
+// 📦 ЛОГІКА ПОРЦІЙ (INFINITE SCROLL)
+// ==========================================
+
+function renderNextBatch() {
+    const container = document.getElementById('news-feed');
+    
+    // Якщо вже все показали - виходимо
+    if (CURRENT_INDEX >= ALL_NEWS.length) return;
+
+    // Беремо наступні 10 штук
+    const nextBatch = ALL_NEWS.slice(CURRENT_INDEX, CURRENT_INDEX + BATCH_SIZE);
+    
+    nextBatch.forEach((newsItem, index) => {
+        // Створюємо картку, передаємо index для затримки анімації
+        createCard(newsItem, index);
+    });
+
+    CURRENT_INDEX += nextBatch.length;
+}
+
+// 🔥 СПОСТЕРІГАЧ ЗА СКРОЛОМ 🔥
+// Ця штука дивиться, коли на екрані з'явиться елемент #scroll-guard
+const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+        // Коли догортали до низу - додаємо ще новин
+        renderNextBatch();
+    }
+}, { rootMargin: '100px' }); // Починаємо вантажити трохи раніше, ніж дійдемо до самого низу
+
+// Підключаємо спостерігач
+const scrollGuard = document.getElementById('scroll-guard');
+if (scrollGuard) observer.observe(scrollGuard);
 
 
 // ==========================================
-// 🧠 ПАРСЕР XML (З ОЧИЩЕННЯМ ТЕКСТУ)
+// 🧠 ПАРСЕР XML (Той самий)
 // ==========================================
 
 function parseXMLPost(xmlItem) {
@@ -98,30 +133,15 @@ function parseXMLPost(xmlItem) {
     let pubDate = getTag("pubDate");
     let rawDescription = getTag("description");
     
-    // --- ОЧИЩЕННЯ ТЕКСТУ (ГЕНЕРАЛЬНЕ ПРИБИРАННЯ) ---
-    
     let tempDiv = document.createElement("div");
     tempDiv.innerHTML = rawDescription;
-    
-    // Видаляємо всі посилання та кнопки з тексту (вони смітять)
     tempDiv.querySelectorAll('a').forEach(a => a.remove());
-    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n')); // Зберігаємо абзаци
+    tempDiv.querySelectorAll('br').forEach(br => br.replaceWith('\n')); 
 
     let cleanText = tempDiv.innerText || "";
-    
-    // 1. Видаляємо теги [Video], [Photo], [Album] і все що в квадратних дужках на початку
-    // Ця регулярка видаляє будь-які квадратні дужки на початку рядка
     cleanText = cleanText.replace(/^(?:\[[^\]]*\]\s*)+/g, '');
-    
-    // 2. Видаляємо конкретні слова, якщо вони зустрічаються десь всередині
-    cleanText = cleanText.replace(/\[Video\]/gi, '')
-                         .replace(/\[Photo\]/gi, '')
-                         .replace(/\[Album\]/gi, '');
-
-    // 3. Чистимо зайві пробіли
+    cleanText = cleanText.replace(/\[Video\]/gi, '').replace(/\[Photo\]/gi, '').replace(/\[Album\]/gi, '');
     cleanText = cleanText.trim();
-
-    // --- ПОШУК МЕДІА ---
 
     let imageSrc = null;
     let videoSrc = null;
@@ -135,18 +155,15 @@ function parseXMLPost(xmlItem) {
     });
 
     if (!videoSrc) {
-        let videoTag = tempDiv.querySelector('video'); // tempDiv тут ще старий, це ок
+        let videoTag = tempDiv.querySelector('video');
         if (videoTag && videoTag.src) videoSrc = videoTag.src;
     }
-    
-    // Шукаємо картинку в rawDescription (бо з tempDiv ми могли видалити посилання)
     if (!imageSrc) {
         let rawDiv = document.createElement("div");
         rawDiv.innerHTML = rawDescription;
         let imgTag = rawDiv.querySelector('img');
         if (imgTag) imageSrc = imgTag.src;
     }
-    
     if (!imageSrc) {
         const imgRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|webp))/i;
         const match = rawDescription.match(imgRegex);
@@ -160,16 +177,12 @@ function parseXMLPost(xmlItem) {
         imageSrc = `https://wsrv.nl/?url=${encodeURIComponent(imageSrc)}&w=600&output=jpg`;
     }
 
-    // --- ЗАГОЛОВОК ---
-    
     if (!cleanText) {
         if (videoSrc) cleanText = "Відео новина";
         else if (imageSrc !== DEFAULT_IMAGE) cleanText = "Фото новина";
         else cleanText = "Новина";
     }
 
-    // Робимо красивий короткий заголовок
-    // Беремо перші 4 слова з вже ОЧИЩЕНОГО тексту
     let words = cleanText.split(/\s+/);
     let shortTitle = words.slice(0, 4).join(' ');
     if (words.length > 4) shortTitle += "...";
@@ -178,23 +191,23 @@ function parseXMLPost(xmlItem) {
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
     return {
-        title: shortTitle, 
-        full: cleanText,  
-        image: imageSrc,
-        video: videoSrc, 
-        date: dateStr,
-        link: link
+        title: shortTitle, full: cleanText, image: imageSrc, video: videoSrc, date: dateStr, link: link
     };
 }
 
 // ==========================================
-// 🎨 КАРТКА
+// 🎨 КАРТКА (З ЗАТРИМКОЮ АНІМАЦІЇ)
 // ==========================================
 
-function createCard(newsItem) {
+function createCard(newsItem, index) {
     const container = document.getElementById('news-feed');
     const card = document.createElement('div');
     card.className = 'news-card';
+    
+    // 🔥 ДОДАЄМО ЗАТРИМКУ АНІМАЦІЇ 🔥
+    // Кожна наступна картка з'явиться на 0.1с пізніше попередньої
+    card.style.animationDelay = `${index * 0.1}s`;
+
     card.onclick = () => openModal(newsItem);
 
     const playOverlay = newsItem.video ? '<div class="play-icon-overlay"></div>' : '';
@@ -213,7 +226,7 @@ function createCard(newsItem) {
 }
 
 // ==========================================
-// 🎬 ПЛЕЄР
+// 🎬 МОДАЛКА
 // ==========================================
 
 function openModal(newsItem) {
@@ -239,10 +252,7 @@ function openModal(newsItem) {
 
     document.getElementById('modal-title').innerText = newsItem.title; 
     document.getElementById('modal-date').innerText = newsItem.date;
-    
-    // Використовуємо innerText, щоб зберегти форматування (\n), але не показувати HTML теги
     document.getElementById('modal-text').innerText = newsItem.full;
-    
     document.getElementById('modal-link').href = newsItem.link;
 
     document.getElementById('news-modal').classList.add('active');
@@ -255,3 +265,7 @@ function closeModal() {
     setTimeout(() => { document.getElementById('media-container').innerHTML = ''; }, 300);
     tg.BackButton.hide();
 }
+
+// Запуск
+loadNews(false);
+setInterval(() => { loadNews(true); }, 300000); 
