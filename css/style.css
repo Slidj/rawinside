@@ -5,6 +5,7 @@
 /* --- ОСНОВНИЙ ФОН --- */
 body {
     margin: 0; padding: 0;
+    /* Темно-синій матовий градієнт */
     background: linear-gradient(135deg, #0a0e17 0%, #141e30 100%);
     color: #ffffff;
     font-family: 'Inter', sans-serif;
@@ -19,7 +20,7 @@ body {
     top: 0; left: 0; width: 100%;
     height: 140px; 
     
-    /* Вирівнювання: Лого по центру (так красивіше без кнопки) */
+    /* Центруємо логотип */
     display: flex; align-items: flex-end; justify-content: center;
     
     padding: 15px 20px 20px 20px; 
@@ -32,25 +33,49 @@ body {
 
 .header h1 { 
     margin: 0; 
-    font-size: 2.2rem; /* Трохи збільшив */
+    font-size: 2rem; 
     font-weight: 900; 
-    letter-spacing: 3px; 
+    letter-spacing: 2px; 
     font-style: italic; 
     background: linear-gradient(to right, #ffffff, #a5b4fc); 
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-transform: uppercase;
-    text-shadow: 0 0 20px rgba(165, 180, 252, 0.3); /* Додав трохи світіння */
+}
+
+/* --- 🔥 АНІМАЦІЯ ЗАВАНТАЖЕННЯ (СПІНЕР) 🔥 --- */
+.loader-container {
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    padding: 50px;
+}
+
+.loader {
+    width: 48px;
+    height: 48px;
+    border: 5px solid rgba(255, 255, 255, 0.1); /* Прозорий обідок */
+    border-bottom-color: #a5b4fc; /* Колір "язичка", що крутиться */
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- ПОВІДОМЛЕННЯ ПРО ПОМИЛКУ --- */
+.error {
+    padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem;
 }
 
 /* --- СТРІЧКА НОВИН --- */
 .news-container {
     padding: 20px;
     display: flex; flex-direction: column; gap: 20px;
-}
-
-.loading, .error {
-    padding: 50px; text-align: center; color: rgba(255,255,255,0.6); font-size: 0.9rem;
 }
 
 /* --- КАРТКА --- */
@@ -102,10 +127,12 @@ body {
 .modal-wrapper {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     z-index: 100;
-    background: rgba(10, 14, 23, 0.9);
-    backdrop-filter: blur(8px);
+    
+    /* Темний непрозорий фон, щоб приховати глюки анімації стрічки */
+    background: rgba(5, 8, 15, 0.96);
+    
     opacity: 0; pointer-events: none;
-    transition: opacity 0.6s ease;
+    transition: opacity 0.4s ease;
 }
 .modal-wrapper.active { opacity: 1; pointer-events: auto; }
 
@@ -115,19 +142,26 @@ body {
     background: #0e1522;
     border-top-left-radius: 24px; border-top-right-radius: 24px;
     transform: translateY(100%);
-    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
     display: flex; flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
-    padding-top: 60px;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+    padding-top: 0;
 }
 .modal-wrapper.active .modal-sheet { transform: translateY(0); }
 
+/* 🔥 ХРЕСТИК ОПУЩЕНО ТА ЗБІЛЬШЕНО 🔥 */
 .close-btn {
-    position: absolute; top: 15px; right: 15px;
-    width: 36px; height: 36px;
-    background: rgba(255,255,255,0.1); border: none; border-radius: 50%;
-    color: #fff; font-size: 1.1rem; z-index: 20; cursor: pointer;
+    position: absolute; 
+    top: 30px;  /* Відступ зверху */
+    right: 20px; /* Відступ справа */
+    width: 44px; height: 44px; /* Розмір кнопки */
+    background: rgba(0, 0, 0, 0.6); 
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 50%;
+    color: #fff; font-size: 1.2rem; z-index: 50; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(10px);
 }
 
 .modal-content { overflow-y: auto; display: flex; flex-direction: column; height: 100%; }
@@ -142,7 +176,7 @@ body {
 .app-image { width: 100%; max-height: 60vh; object-fit: contain; }
 
 .text-content { padding: 25px; padding-bottom: 80px; background: #0e1522; flex-grow: 1; }
-#modal-title { font-size: 1.6rem; margin: 0 0 10px 0; line-height: 1.2; }
+#modal-title { font-size: 1.6rem; margin: 0 0 10px 0; line-height: 1.2; font-weight: 700; }
 .full-text { font-size: 1.05rem; line-height: 1.6; color: rgba(255,255,255,0.8); white-space: pre-wrap; }
 .news-date { color: rgba(255,255,255,0.5); display: block; margin-bottom: 20px; }
 
